@@ -106,7 +106,8 @@ async function takeTurn(game) {
 
     const result = game.playCard(num - 1, cpIdx);
     if (result.error === 'locked') {
-      printError(`Kartu tipe '${result.lockedType}' dikunci oleh efek lawan!`);
+      const lockName = result.lockedType === 'active' ? 'AKTIF' : result.lockedType.toUpperCase();
+      printError(`Kartu ${lockName} dikunci oleh efek lawan!`);
       continue;
     }
     if (result.error) {

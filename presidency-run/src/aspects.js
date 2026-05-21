@@ -1,7 +1,12 @@
 import { ASPECTS } from './cards.js';
 
 export class AspectEngine {
-  // Initialise random weights that sum to 100 (integers)
+  // All aspects start equal — news events shift weights from this baseline
+  static uniformWeights() {
+    return Object.fromEntries(ASPECTS.map(a => [a, 20]));
+  }
+
+  // Used only for sudden death re-randomisation
   static randomWeights() {
     const raw = ASPECTS.map(() => Math.random());
     const total = raw.reduce((s, v) => s + v, 0);

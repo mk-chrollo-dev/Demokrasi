@@ -32,7 +32,7 @@ export class GameState {
     this.phase = GAME_PHASE.SETUP;
     this.firstMoverThisRound = 0; // alternates each round
 
-    this.weights = AspectEngine.randomWeights();
+    this.weights = AspectEngine.uniformWeights(); // starts equal; news shifts these
 
     this.winner = null;
     this.winReason = null;

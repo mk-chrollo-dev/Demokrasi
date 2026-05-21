@@ -26,6 +26,9 @@ console.log(`P1 aspects: ${JSON.stringify(p0.aspects)}`);
 console.log(`P2 aspects: ${JSON.stringify(p1.aspects)}`);
 console.log(`Weights: ${JSON.stringify(game.weights)}`);
 assert(Object.values(game.weights).reduce((s, v) => s + v, 0) === 100, 'weights sum to 100');
+// Weights start uniform (20 each) before any news fires; after startFirstRound news fires once
+const allStartNear20 = Object.values(game.weights).every(w => w >= 12 && w <= 28);
+assert(allStartNear20, 'weights start near-uniform after first news shift');
 
 // ── Verify starting hands ─────────────────────────────────────────────────────
 assert(p0.hand.length === 5, `P1 starting hand = 5 (got ${p0.hand.length})`);
@@ -37,7 +40,7 @@ const drawn1 = game.beginTurn();
 console.log(`P1 drew: ${drawn1.map(c => c.name).join(', ') || '(none)'}`);
 
 // Find an attack card in P1's hand
-const attackIdx = p0.hand.findIndex(c => c.type === 'attack' || c.type === 'relawan' || c.type === 'media');
+const attackIdx = p0.hand.findIndex(c => c.type === 'active' || c.type === 'passive');
 assert(attackIdx !== -1, 'P1 has at least one playable card');
 
 const cardToPlay = p0.hand[attackIdx];
@@ -49,9 +52,15 @@ assert(!result1.error, `P1 card play succeeded (${result1.error || 'ok'})`);
 assert(result1.effectResults !== undefined, 'effectResults present');
 console.log(`Effect results: ${JSON.stringify(result1.effectResults)}`);
 
-// Verify aspect changed (at least one effect applied)
-const anyChange = ASPECTS.some(a => p0.aspects[a] !== 50 || p1.aspects[a] !== 50);
-assert(anyChange, 'At least one aspect changed after P1 turn 1');
+// If an active card was played expect an immediate aspect change; passive cards tick later
+if (cardToPlay.type === 'active') {
+  const anyChange = ASPECTS.some(a => p0.aspects[a] !== 50 || p1.aspects[a] !== 50);
+  assert(anyChange, 'Active card: at least one aspect changed after P1 turn 1');
+} else {
+  // Passive — effects are queued; verify effect landed on activeEffects
+  const hasQueuedEffect = p0.activeEffects.length > 0 || p1.activeEffects.length > 0;
+  assert(hasQueuedEffect, `Passive card (${cardToPlay.name}): effect queued on activeEffects`);
+}
 
 // End turn 1
 const end1 = game.endTurn(0);

@@ -128,11 +128,13 @@ export function printHand(hand, playerName) {
     return;
   }
   hand.forEach((card, i) => {
-    const colorLabel = card.color === 'red'
-      ? col('red', '[MERAH]')
-      : col('blue', '[BIRU]');
-    const typeLabel = col('dim', `[${card.type.toUpperCase()}]`);
-    console.log(`  ${col('bold', String(i + 1) + '.')} ${card.name} ${colorLabel} ${typeLabel}`);
+    const colorLabel = card.color === 'red' ? col('red', '[MERAH]') : col('blue', '[BIRU]');
+    const typeDisplay = {
+      active: col('yellow', '[AKTIF]'),
+      passive: col('cyan', '[PASIF]'),
+      foulplay: col('bgRed', '[FOUL PLAY]'),
+    }[card.type] ?? col('dim', `[${card.type.toUpperCase()}]`);
+    console.log(`  ${col('bold', String(i + 1) + '.')} ${card.name} ${colorLabel} ${typeDisplay}`);
     console.log(`     ${col('dim', card.description)}`);
   });
   console.log('');
@@ -184,14 +186,17 @@ export function printCardPlayed(playerName, card, effectResults) {
       case 'draw':
         console.log(`    → Tarik ${r.delta} kartu tambahan`);
         break;
-      case 'aura':
-        console.log(`    → Efek aura aktif selama ${r.durationTurns} giliran`);
+      case 'aura': {
+        const aspectLabel = r.target === 'all' ? 'semua aspek' : r.target;
+        const whoLabel = r.targetPlayer === 'self' ? 'kamu' : 'lawan';
+        console.log(`    → ${aspectLabel} ${whoLabel} bertick selama ${r.durationTurns} giliran`);
         break;
+      }
       case 'amplify':
-        console.log(`    → Amplify aktif — kartu berikutnya mendapat bonus`);
+        console.log(`    → Amplify aktif — kartu AKTIF berikutnya mendapat +50% efek`);
         break;
       case 'lock':
-        console.log(`    → Lawan tidak bisa memainkan kartu ${r.target.toUpperCase()} selama ${r.durationTurns} giliran`);
+        console.log(`    → Lawan tidak bisa memainkan kartu ${r.target === 'active' ? 'AKTIF' : r.target.toUpperCase()} selama ${r.durationTurns} giliran`);
         break;
       case 'reveal':
         console.log(`    → Melihat 1 kartu lawan selama ${r.durationTurns} giliran`);

@@ -66,8 +66,8 @@ export class EffectEngine {
 
       let delta = eff.deltaType === 'percent' ? 0 : eff.delta;
 
-      // amplify: boost the delta by amplify.delta %
-      if (amplify && eff.type !== 'cleanse' && eff.type !== 'reveal' && eff.type !== 'lock' && eff.type !== 'suppress') {
+      // amplify only boosts active cards (direct growth/decay)
+      if (amplify && card.type === 'active' && (eff.type === 'growth' || eff.type === 'decay')) {
         delta = Math.round(delta * (1 + amplify.delta / 100));
       }
 
@@ -104,11 +104,7 @@ export class EffectEngine {
         case 'lock':
         case 'suppress':
         case 'skip': {
-          // persistent effects go onto target's activeEffects
           const newEff = { ...eff };
-          if (amplify && eff.type !== 'lock' && eff.type !== 'suppress') {
-            newEff.delta = delta;
-          }
           this.applyEffect(targetPlayer, newEff);
           results.push({ type: eff.type, durationTurns: eff.durationTurns, target: eff.target });
           break;
@@ -123,8 +119,19 @@ export class EffectEngine {
       }
     }
 
-    // Consume amplify after first onPlay card (it's a one-shot)
-    if (amplify && card.effects.some(e => e.triggerOn === 'onPlay' && e.type !== 'amplify')) {
+    // Register tick-based effects into activeEffects when the card is played
+    for (const eff of card.effects) {
+      if (eff.triggerOn !== 'tick') continue;
+      const targetPlayer = eff.targetPlayer === 'self' ? player : opponentPlayer;
+      if (eff.exclusive) {
+        targetPlayer.activeEffects = targetPlayer.activeEffects.filter(e => e.type !== eff.type);
+      }
+      targetPlayer.activeEffects.push({ ...eff });
+      results.push({ type: eff.type, durationTurns: eff.durationTurns, target: eff.target, targetPlayer: eff.targetPlayer });
+    }
+
+    // Consume amplify only when an active card is played
+    if (amplify && card.type === 'active') {
       player.activeEffects = player.activeEffects.filter(e => e !== amplify);
     }
 
