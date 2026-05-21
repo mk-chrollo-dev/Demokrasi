@@ -1,0 +1,14 @@
+{
+  "name": "presidency-run",
+  "version": "1.0.0",
+  "description": "1v1 terminal-based political card game",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node src/test-sim.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
