@@ -6,6 +6,8 @@ import { join, dirname } from 'path';
 import { getLocalIP } from './network-info.js';
 import * as room from './room-manager.js';
 import * as runner from './game-runner.js';
+import { CARD_REGISTRY } from '../src/cards.js';
+import { PRESIDENTS } from '../src/presidents.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -16,6 +18,96 @@ const PORT = process.env.PORT || 3000;
 const LOCAL_IP = getLocalIP();
 
 app.use(express.static(join(__dirname, '..', 'public')));
+
+// ── Browser data endpoints ──────────────────────────────────────────────────
+
+function getIconType(card) {
+  if (card.isFoulPlay) return 'skull';
+  const t = ((card.name || '') + ' ' + (card.description || '')).toLowerCase();
+  if (/pidato|orasi|ceramah|speech/.test(t)) return 'speech';
+  if (/jalan|tol|rel|kereta|jembatan|road/.test(t)) return 'road';
+  if (/dana|modal|investasi|fund|uang|rupiah/.test(t)) return 'money';
+  if (/relawan|massa|rakyat|crowd|warga/.test(t)) return 'crowd';
+  if (/media|pers|tvri|berita|koran|surat kabar/.test(t)) return 'newspaper';
+  if (/koalisi|damai|diplomasi|handshake|perjanjian/.test(t)) return 'handshake';
+  if (/gedung|bangunan|proyek|konstruksi/.test(t)) return 'building';
+  if (/lindung|tameng|benteng|shield|pertahanan/.test(t)) return 'shield';
+  if (/skandal|korupsi|serangan|fitnah|black/.test(t)) return 'sword';
+  if (/sehat|dokter|medis|penyakit|kesehatan/.test(t)) return 'heart';
+  if (/didik|sekolah|buku|book|pendidik|belajar/.test(t)) return 'book';
+  if (/infrastruktur|gear|fasilitas|jaringan/.test(t)) return 'gear';
+  if (/ekonomi|bisnis|pasar|pdb|industri/.test(t)) return 'chart';
+  const effects = card.effects || [];
+  if (effects.some(e => e.type === 'cleanse')) return 'broom';
+  if (effects.some(e => e.type === 'draw')) return 'envelope';
+  if (card.type === 'passive' && effects.some(e => e.type === 'aura' && e.delta > 0)) return 'lightning';
+  if (card.type === 'active') return 'star';
+  return 'clock';
+}
+
+app.get('/js/cards-browser.js', (req, res) => {
+  const registry = {};
+  for (const [id, card] of CARD_REGISTRY) {
+    registry[id] = {
+      id: card.id,
+      name: card.name,
+      type: card.type,
+      isFoulPlay: card.isFoulPlay || false,
+      owner: card.owner,
+      description: card.description || '',
+      iconType: getIconType(card),
+    };
+  }
+  const presData = PRESIDENTS.map(p => ({
+    id: p.id,
+    displayName: p.displayName,
+    tagline: p.tagline,
+    passive: p.passive?.description || '',
+  }));
+  res.type('application/javascript');
+  res.send(
+    `window.CARD_REGISTRY = ${JSON.stringify(registry)};\n` +
+    `window.PRESIDENT_DATA = ${JSON.stringify(presData)};`
+  );
+});
+
+const HEADLINES = [
+  'Harga bahan pokok meroket, inflasi capai rekor tertinggi',
+  'Ekspor batubara melonjak, cadangan devisa meningkat pesat',
+  'Wabah demam berdarah menyebar ke 12 provinsi',
+  'Program vaksinasi nasional raih cakupan 90 persen',
+  'Bom meledak di pasar tradisional, korban berjatuhan',
+  'Operasi bersih perbatasan berhasil, jalur penyelundupan ditutup',
+  'Anggaran pendidikan disunat demi bayar utang luar negeri',
+  'Beasiswa luar negeri dibuka untuk 10.000 pelajar berprestasi',
+  'Jembatan Kalimantan runtuh, ratusan tertahan',
+  'Jalan tol Trans-Sumatera resmi beroperasi penuh',
+  'PHK massal di pabrik tekstil, ribuan buruh menganggur',
+  'Investasi asing naik 40 persen, lapangan kerja terbuka lebar',
+  'Rumah sakit kehabisan stok darah dan obat generik',
+  'BPJS Kesehatan catat surplus pertama dalam sejarah',
+  'Polisi terlibat jaringan narkoba lintas batas',
+  'Densus 88 tangkap 30 tersangka teroris dalam sepekan',
+  'Ribuan guru honorer mogok, sekolah lumpuh berhari-hari',
+  'Universitas negeri raih peringkat 100 besar Asia',
+  'Banjir bandang hancurkan jembatan di tiga kabupaten',
+  'Proyek kereta cepat Jakarta-Surabaya dimulai',
+  'Rupiah tembus Rp 18.000 per dolar, pasar saham anjlok',
+  'Bank sentral stabilkan kurs, kepercayaan investor pulih',
+  'Virus baru terdeteksi, WHO keluarkan peringatan dini',
+  'Posyandu digital diluncurkan di 5.000 desa terpencil',
+  'Konflik agraria berujung bentrokan berdarah di Kaltim',
+  'Perlindungan WNI di luar negeri ditingkatkan signifikan',
+  'Tawuran pelajar tewaskan dua remaja di ibukota',
+  'Program makan bergizi gratis perbaiki gizi 2 juta murid',
+  'Listrik padam 12 jam, industri manufaktur mati suri',
+  'Sambungan internet desa capai 80 persen wilayah 3T',
+];
+
+app.get('/js/news-headlines.js', (req, res) => {
+  res.type('application/javascript');
+  res.send(`window.HEADLINES = ${JSON.stringify(HEADLINES)};`);
+});
 
 // Export for Electron integration (Option B: direct import)
 export function startServer(port = PORT) {

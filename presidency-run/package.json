@@ -5,18 +5,19 @@
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
-    "start":       "node server/server.js",
-    "dev":         "node --watch server/server.js",
-    "terminal":    "node src/main.js",
-    "test":        "node src/test-sim.js",
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "terminal": "node src/main.js",
+    "test": "node src/test-sim.js",
     "diagnostics": "node src/diagnostics.js",
-    "electron":    "electron ."
+    "electron": "electron ."
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "express":   "latest",
+    "canvas": "^3.2.3",
+    "express": "latest",
     "socket.io": "latest"
   },
   "devDependencies": {
