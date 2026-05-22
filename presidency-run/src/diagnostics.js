@@ -86,8 +86,8 @@ gSNO.startFirstRound();
 const beforeSno = { ...gSNO.players[0].aspects };
 const turnResult = gSNO.beginTurn(); // round 1, turn 0 — Soekarno's first turn
 const afterSno = gSNO.players[0].aspects;
-const snoGot2 = ASPECTS.every(a => afterSno[a] === Math.min(100, beforeSno[a] + 2));
-assert(snoGot2, 'Soekarno Orator Ulung: all aspects +2 on round first turn');
+const snoGot1 = ASPECTS.every(a => afterSno[a] === Math.min(100, beforeSno[a] + 1));
+assert(snoGot1, 'Soekarno Orator Ulung: all aspects +1 on round first turn');
 assert(turnResult.passiveNotification?.passive === 'orator_ulung', 'Orator Ulung notification returned');
 
 // Prabowo: pantang_menyerah fires if aspect < 40
@@ -262,8 +262,8 @@ section('Foul Play Backfire');
   g2.setup();
   g2.startFirstRound();
 
-  const fpCard = g2.players[0].deck.find(c => c.isFoulPlay);
-  assert(fpCard !== undefined, 'Jokowi deck has a foulplay card');
+  const fpCard = [...g2.players[0].deck, ...g2.players[0].hand].find(c => c.isFoulPlay);
+  assert(fpCard !== undefined, 'Jokowi deck or hand has a foulplay card');
 
   // Load it into slot manually
   g2.players[0].foulPlaySlot = fpCard;

@@ -107,6 +107,7 @@ function dehydrateGame(game, prevState) {
     aspectWeights: { ...game.weights },
     newsLog: prevState?.newsLog || [],
     actionLog: prevState?.actionLog || [],
+    lastNewsEvent: prevState?.lastNewsEvent || null,
     winner: game.winner,
     winReason: game.winReason,
   };
@@ -254,9 +255,16 @@ export function runAction(state, action, playerRole) {
     }
 
     // Handle round end — auto-advance (no client pause needed)
+    let lastNewsEvent = state.lastNewsEvent || null;
     if (endResult.phase === GAME_PHASE.ROUND_END) {
-      if (game.lastNewsHeadline) newsLog.push(game.lastNewsHeadline);
+      const weightsBefore = { ...game.weights };
       game.startNextRound();
+      if (game.lastNewsHeadline) {
+        newsLog.push(game.lastNewsHeadline);
+        // Find which aspect weight changed and in which direction (no magnitude)
+        const changed = Object.keys(game.weights).find(a => game.weights[a] !== weightsBefore[a]);
+        if (changed) lastNewsEvent = { aspect: changed, direction: game.weights[changed] > weightsBefore[changed] ? 'up' : 'down', headline: game.lastNewsHeadline };
+      }
     }
 
     // Draw for the next player (beginTurn)
@@ -295,7 +303,7 @@ export function runAction(state, action, playerRole) {
 
     actionLog.push(...beginLog, `${playerRole} ended turn — ${game.currentPlayerIndex() === 0 ? 'p1' : 'p2'}'s turn`);
 
-    const newState = dehydrateGame(game, { newsLog, actionLog });
+    const newState = dehydrateGame(game, { newsLog, actionLog, lastNewsEvent });
     newState.cardPlayedThisTurn = false;
 
     return { newState, logEntry: actionLog[actionLog.length - 1], isGameOver: false, winner: null };

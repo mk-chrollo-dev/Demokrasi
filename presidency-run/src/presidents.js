@@ -13,14 +13,14 @@ export const PRESIDENTS = [
     humorBio: [
       'Proklamator kemerdekaan, penulis pidato terpanjang di dunia,',
       'dan arsitek kebijakan luar negeri yang berani — baca: nekat.',
-      'PASSIVE ORATOR ULUNG: Tiap ronde, semua aspekmu naik +2',
+      'PASSIVE ORATOR ULUNG: Tiap ronde, semua aspekmu naik +1',
       'sebelum giliran pertamamu. Belum apa-apa, lawan sudah tertinggal.',
     ],
     passive: {
-      description: 'ORATOR ULUNG — Awal setiap ronde: semua aspek +2',
+      description: 'ORATOR ULUNG — Awal setiap ronde: semua aspek +1',
       applyOnRoundFirstTurn(player) {
-        for (const a of ASPECTS) player.aspects[a] = Math.min(100, player.aspects[a] + 2);
-        return { passive: 'orator_ulung', message: 'Orator Ulung aktif: semua aspek +2' };
+        for (const a of ASPECTS) player.aspects[a] = Math.min(100, player.aspects[a] + 1);
+        return { passive: 'orator_ulung', message: 'Orator Ulung aktif: semua aspek +1' };
       },
     },
     deckIds: [
@@ -41,12 +41,15 @@ export const PRESIDENTS = [
     humorBio: [
       'Bapak Pembangunan Indonesia. Juga Bapak KKN —',
       'tapi bagian itu tidak masuk buku pelajaran SD.',
-      'PASSIVE STABILITAS ORDE BARU: Keamananmu mulai di 65 bukan 50.',
-      'Sangat stabil. Jangan tanya caranya.',
+      'PASSIVE STABILITAS ORDE BARU: Keamanan mulai 65, Ekonomi mulai 60.',
+      'Dua aspek diatur sejak hari pertama. Sangat stabil. Jangan tanya caranya.',
     ],
     passive: {
-      description: 'STABILITAS ORDE BARU — Keamanan mulai di 65',
-      applyOnInit(player) { player.aspects['Keamanan'] = 65; },
+      description: 'STABILITAS ORDE BARU — Keamanan mulai di 65, Ekonomi mulai di 60',
+      applyOnInit(player) {
+        player.aspects['Keamanan'] = 65;
+        player.aspects['Ekonomi'] = 60;
+      },
     },
     deckIds: [
       'har_a01', 'har_a01',
@@ -91,17 +94,20 @@ export const PRESIDENTS = [
     humorBio: [
       'Mantan jenderal, mantan menantu Soeharto, tiga kali nyalon presiden.',
       'Akhirnya berhasil di percobaan ketiga setelah belajar TikTok.',
-      'PASSIVE PANTANG MENYERAH: Tiap giliranmu, aspek di bawah 40 naik +5.',
+      'PASSIVE PANTANG MENYERAH: Awal setiap ronde, aspek di bawah 35 naik +5 (maks +15).',
       'Semakin tertinggal, semakin berbahaya.',
     ],
     passive: {
-      description: 'PANTANG MENYERAH — Setiap giliran: aspek di bawah 40 → +5',
-      applyOnTurnStart(player) {
+      description: 'PANTANG MENYERAH — Awal setiap ronde: aspek di bawah 35 → +5 (maks +15/ronde)',
+      applyOnRoundFirstTurn(player) {
         const boosts = [];
-        for (const a of ASPECTS) {
-          if (player.aspects[a] < 40) {
+        let totalBoost = 0;
+        const sorted = ASPECTS.slice().sort((a, b) => player.aspects[a] - player.aspects[b]);
+        for (const a of sorted) {
+          if (player.aspects[a] < 35 && totalBoost < 15) {
             player.aspects[a] = Math.min(100, player.aspects[a] + 5);
             boosts.push(a);
+            totalBoost += 5;
           }
         }
         return boosts.length > 0
@@ -127,16 +133,19 @@ export const PRESIDENTS = [
     humorBio: [
       'Dari jualan furnitur di Solo ke Istana Negara dalam satu dekade.',
       'Kisah paling inspiratif Indonesia — sampai babak kedua.',
-      'PASSIVE BLUSUKAN: Sekali per ronde, lihat 2 kartu teratas deck lawan.',
-      'Tidak dipindah. Katanya sih untuk transparansi.',
+      'PASSIVE BLUSUKAN: Awal setiap ronde, aspek terendah +3 dan lihat 2 kartu teratas deck lawan.',
+      'Tahu situasi lebih awal, tetap gerak maju.',
     ],
     passive: {
-      description: 'BLUSUKAN — Awal setiap ronde: lihat 2 kartu teratas deck lawan',
+      description: 'BLUSUKAN — Awal setiap ronde: aspek terendah +3 & lihat 2 kartu teratas deck lawan',
       applyOnRoundFirstTurn(player, opponent) {
+        const sorted = ASPECTS.slice().sort((a, b) => player.aspects[a] - player.aspects[b]);
+        const lowestAsp = sorted[0];
+        player.aspects[lowestAsp] = Math.min(100, player.aspects[lowestAsp] + 3);
         const topCards = opponent.deck.slice(-2).reverse().map(c => c.name);
         return {
           passive: 'blusukan',
-          message: `[BLUSUKAN] Kartu berikutnya lawan: ${topCards.length > 0 ? topCards.join(', ') : '(kosong)'}`,
+          message: `[BLUSUKAN] ${lowestAsp} +3. Kartu berikutnya lawan: ${topCards.length > 0 ? topCards.join(', ') : '(kosong)'}`,
         };
       },
     },

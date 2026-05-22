@@ -56,9 +56,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'soekarno',
-    description: 'Ekonomi kamu +14.',
+    description: 'Ekonomi kamu +12.',
     effects: [
-      growth('Ekonomi', 14, 'Pidato Bakar Semangat'),
+      growth('Ekonomi', 12, 'Pidato Bakar Semangat'),
     ],
   },
 
@@ -108,9 +108,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'soekarno',
-    description: 'Semua aspek kamu +5.',
+    description: 'Semua aspek kamu +3.',
     effects: [
-      growth('all', 5, 'Aliansi Nasional'),
+      growth('all', 3, 'Aliansi Nasional'),
     ],
   },
 
@@ -174,9 +174,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'soekarno',
-    description: 'Semua aspek kamu +3/giliran selama 4 giliran.',
+    description: 'Semua aspek kamu +2/giliran selama 3 giliran.',
     effects: [
-      aura('all', 3, 4, 'Retorika Revolusi'),
+      aura('all', 2, 3, 'Retorika Revolusi'),
     ],
   },
 
@@ -186,9 +186,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'soekarno',
-    description: 'Semua aspek kamu +2/giliran selama 5 giliran.',
+    description: 'Semua aspek kamu +1/giliran selama 5 giliran.',
     effects: [
-      aura('all', 2, 5, 'Koalisi Lintas Partai'),
+      aura('all', 1, 5, 'Koalisi Lintas Partai'),
     ],
   },
 
@@ -261,9 +261,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'soekarno',
-    description: 'Kartu Active berikutnya yang kamu mainkan mendapat efek 2× (100% flat).',
+    description: 'Kartu Active berikutnya mendapat efek +50% (sekali pakai).',
     effects: [
-      fx('amplify', 'all', 'self', 100, 'flat', -1, 'onPlay', 'Siaran Radio Kampanye', { exclusive: true, remainingUses: 1 }),
+      fx('amplify', 'all', 'self', 50, 'flat', -1, 'onPlay', 'Siaran Radio Kampanye', { exclusive: true, remainingUses: 1 }),
     ],
   },
 
@@ -288,11 +288,11 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: true,
     owner: 'soekarno',
-    description: 'Semua aspek kamu +12 seketika; semua aspek lawan −8 seketika; lawan dilewati 2 giliran.',
+    description: 'Semua aspek kamu +12 seketika; semua aspek lawan −8 seketika; lawan dilewati 1 giliran.',
     effects: [
       growth('all', 12, 'Kotak Suara Ajaib'),
       fx('decay', 'all', 'opponent', -8, 'flat', 0, 'onPlay', 'Kotak Suara Ajaib'),
-      fx('skip', 'all', 'opponent', 2, 'flat', 2, 'onPlay', 'Kotak Suara Ajaib'),
+      fx('skip', 'all', 'opponent', 1, 'flat', 1, 'onPlay', 'Kotak Suara Ajaib'),
     ],
   },
 
@@ -400,9 +400,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'soeharto',
-    description: 'Hapus 1 efek positif terkuat dari papan lawan.',
+    description: 'Hapus 1 efek positif terkuat dari papan lawan; Pendidikan lawan −8.',
     effects: [
       fx('hostile_cleanse', 'all', 'opponent', 1, 'flat', 0, 'onPlay', 'Reshuffle Narasi'),
+      decay('Pendidikan', -8, 'Reshuffle Narasi'),
     ],
   },
 
@@ -412,9 +413,8 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'soeharto',
-    description: 'Lawan hanya bisa memainkan 1 kartu selama 2 giliran (blokir passive + active).',
+    description: 'Lawan tidak bisa memainkan kartu Active selama 2 giliran.',
     effects: [
-      fx('block_passive_play', 'all', 'opponent', 0, 'flat', 2, 'onPlay', 'Intimidasi Halus'),
       fx('block_active_play',  'all', 'opponent', 0, 'flat', 2, 'onPlay', 'Intimidasi Halus'),
     ],
   },
@@ -527,9 +527,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'soeharto',
-    description: '2 kartu Active berikutnya yang kamu mainkan masing-masing mendapat bonus +5 flat.',
+    description: '2 kartu Active berikutnya masing-masing mendapat efek +50% flat.',
     effects: [
-      fx('amplify', 'all', 'self', 5, 'flat', -1, 'onPlay', 'TVRI Satu Channel', { exclusive: true, remainingUses: 2 }),
+      fx('amplify', 'all', 'self', 50, 'flat', -1, 'onPlay', 'TVRI Satu Channel', { exclusive: true, remainingUses: 2 }),
     ],
   },
 
@@ -655,9 +655,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'megawati',
-    description: 'Keamanan kamu +12, Pendidikan lawan −8.',
+    description: 'Keamanan kamu +14, Pendidikan lawan −8.',
     effects: [
-      growth('Keamanan',   12, 'Debat Langsung'),
+      growth('Keamanan',   14, 'Debat Langsung'),
       decay('Pendidikan',  -8, 'Debat Langsung'),
     ],
   },
@@ -668,10 +668,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'megawati',
-    description: 'Ekonomi lawan −14, Ekonomi kamu +6.',
+    description: 'Ekonomi lawan −14, Ekonomi kamu +8.',
     effects: [
       decay('Ekonomi',  -14, 'Serangan Balik'),
-      growth('Ekonomi',   6, 'Serangan Balik'),
+      growth('Ekonomi',   8, 'Serangan Balik'),
     ],
   },
 
@@ -681,9 +681,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'megawati',
-    description: 'Keamanan lawan −12, Pendidikan lawan −10.',
+    description: 'Keamanan lawan −14, Pendidikan lawan −10.',
     effects: [
-      decay('Keamanan',   -12, 'Bocoran Rekam Jejak'),
+      decay('Keamanan',   -14, 'Bocoran Rekam Jejak'),
       decay('Pendidikan', -10, 'Bocoran Rekam Jejak'),
     ],
   },
@@ -694,10 +694,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'megawati',
-    description: 'Ekonomi lawan −10, Kesehatan lawan −8; passive berikutnya lawan tidak berdampak.',
+    description: 'Ekonomi lawan −12, Kesehatan lawan −10; passive berikutnya lawan tidak berdampak.',
     effects: [
-      decay('Ekonomi',   -10, 'Komentar Kontroversial Lawan'),
-      decay('Kesehatan',  -8, 'Komentar Kontroversial Lawan'),
+      decay('Ekonomi',   -12, 'Komentar Kontroversial Lawan'),
+      decay('Kesehatan', -10, 'Komentar Kontroversial Lawan'),
       fx('nullify_next_passive', 'all', 'opponent', 0, 'flat', -1, 'onPlay', 'Komentar Kontroversial Lawan'),
     ],
   },
@@ -895,9 +895,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Keamanan kamu +16.',
+    description: 'Keamanan kamu +10.',
     effects: [
-      growth('Keamanan', 16, 'Debat Tegas'),
+      growth('Keamanan', 10, 'Debat Tegas'),
     ],
   },
 
@@ -907,10 +907,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Ekonomi kamu +10, Infrastruktur kamu +8.',
+    description: 'Ekonomi kamu +8, Infrastruktur kamu +6.',
     effects: [
-      growth('Ekonomi',      10, 'Visi Indonesia Maju'),
-      growth('Infrastruktur',  8, 'Visi Indonesia Maju'),
+      growth('Ekonomi',      8, 'Visi Indonesia Maju'),
+      growth('Infrastruktur', 6, 'Visi Indonesia Maju'),
     ],
   },
 
@@ -920,10 +920,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Pendidikan kamu +10, Ekonomi kamu +8.',
+    description: 'Pendidikan kamu +8, Ekonomi kamu +6.',
     effects: [
-      growth('Pendidikan', 10, 'Gemoy Offensive'),
-      growth('Ekonomi',     8, 'Gemoy Offensive'),
+      growth('Pendidikan', 8, 'Gemoy Offensive'),
+      growth('Ekonomi',    6, 'Gemoy Offensive'),
     ],
   },
 
@@ -960,9 +960,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Semua aspek kamu +6.',
+    description: 'Semua aspek kamu +3.',
     effects: [
-      growth('all', 6, 'Menang dari Nol'),
+      growth('all', 3, 'Menang dari Nol'),
     ],
   },
 
@@ -985,10 +985,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Keamanan lawan −14; lawan tidak bisa menarik kartu giliran berikutnya.',
+    description: 'Keamanan lawan −14, Pendidikan lawan −8.',
     effects: [
-      decay('Keamanan', -14, 'Isu Keamanan Nasional'),
-      fx('skip', 'all', 'opponent', 1, 'flat', 1, 'onPlay', 'Isu Keamanan Nasional'),
+      decay('Keamanan',   -14, 'Isu Keamanan Nasional'),
+      decay('Pendidikan',  -8, 'Isu Keamanan Nasional'),
     ],
   },
 
@@ -998,9 +998,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Semua aspek kamu +8.',
+    description: 'Semua aspek kamu +4.',
     effects: [
-      growth('all', 8, 'Koalisi Besar 2024'),
+      growth('all', 4, 'Koalisi Besar 2024'),
     ],
   },
 
@@ -1025,9 +1025,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Semua aspek kamu +3/giliran selama 4 giliran.',
+    description: 'Semua aspek kamu +2/giliran selama 3 giliran.',
     effects: [
-      aura('all', 3, 4, 'Gerindra Mesin'),
+      aura('all', 2, 3, 'Gerindra Mesin'),
     ],
   },
 
@@ -1037,10 +1037,10 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Pendidikan kamu +5/giliran selama 4 giliran; Ekonomi kamu +4/giliran selama 4 giliran.',
+    description: 'Pendidikan kamu +4/giliran selama 3 giliran; Ekonomi kamu +3/giliran selama 3 giliran.',
     effects: [
-      aura('Pendidikan', 5, 4, 'Branding Baru'),
-      aura('Ekonomi',    4, 4, 'Branding Baru'),
+      aura('Pendidikan', 4, 3, 'Branding Baru'),
+      aura('Ekonomi',    3, 3, 'Branding Baru'),
     ],
   },
 
@@ -1050,9 +1050,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Keamanan kamu +7/giliran selama 4 giliran.',
+    description: 'Keamanan kamu +3/giliran selama 3 giliran.',
     effects: [
-      aura('Keamanan', 7, 4, 'Anggaran Kampanye Terorganisir'),
+      aura('Keamanan', 3, 3, 'Anggaran Kampanye Terorganisir'),
     ],
   },
 
@@ -1062,9 +1062,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Semua aspek kamu +4 seketika; tarik 1 kartu.',
+    description: 'Semua aspek kamu +2 seketika; tarik 1 kartu.',
     effects: [
-      growth('all', 4, 'TKN Prabowo-Gibran'),
+      growth('all', 2, 'TKN Prabowo-Gibran'),
       draw(1, 'TKN Prabowo-Gibran'),
     ],
   },
@@ -1100,9 +1100,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Semua aspek kamu +2/giliran selama 5 giliran.',
+    description: 'Semua aspek kamu +2/giliran selama 3 giliran.',
     effects: [
-      aura('all', 2, 5, 'Koalisi Pita Merah'),
+      aura('all', 2, 3, 'Koalisi Pita Merah'),
     ],
   },
 
@@ -1112,9 +1112,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Keamanan kamu +6/giliran selama 3 giliran.',
+    description: 'Keamanan kamu +4/giliran selama 3 giliran.',
     effects: [
-      aura('Keamanan', 6, 3, 'Narasi Pahlawan'),
+      aura('Keamanan', 4, 3, 'Narasi Pahlawan'),
     ],
   },
 
@@ -1124,10 +1124,10 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'prabowo',
-    description: 'Keamanan kamu terlindungi 2×; Ekonomi kamu terlindungi 2×.',
+    description: 'Keamanan kamu terlindungi 1×; Ekonomi kamu terlindungi 1×.',
     effects: [
-      fx('shield', 'Keamanan', 'self', 2, 'flat', -1, 'onPlay', 'Strategi Sabar'),
-      fx('shield', 'Ekonomi',  'self', 2, 'flat', -1, 'onPlay', 'Strategi Sabar'),
+      fx('shield', 'Keamanan', 'self', 1, 'flat', -1, 'onPlay', 'Strategi Sabar'),
+      fx('shield', 'Ekonomi',  'self', 1, 'flat', -1, 'onPlay', 'Strategi Sabar'),
     ],
   },
 
@@ -1139,11 +1139,11 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: true,
     owner: 'prabowo',
-    description: 'Semua aspek kamu +15; semua aspek lawan −10; kunci slot foul play lawan 4 giliran; blokir passive lawan 2 giliran.',
+    description: 'Semua aspek kamu +15; semua aspek lawan −10; kunci slot foul play lawan 3 giliran; blokir passive lawan 2 giliran.',
     effects: [
       growth('all', 15, 'Dukungan Terakhir Menit'),
       fx('decay', 'all', 'opponent', -10, 'flat', 0, 'onPlay', 'Dukungan Terakhir Menit'),
-      fx('lock_foulplay_slot', 'all', 'opponent', 0, 'flat', 4, 'onPlay', 'Dukungan Terakhir Menit'),
+      fx('lock_foulplay_slot', 'all', 'opponent', 0, 'flat', 3, 'onPlay', 'Dukungan Terakhir Menit'),
       fx('block_passive_play',  'all', 'opponent', 0, 'flat', 2, 'onPlay', 'Dukungan Terakhir Menit'),
     ],
   },
@@ -1176,9 +1176,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Ekonomi kamu +10, Infrastruktur kamu +8.',
+    description: 'Ekonomi kamu +12, Infrastruktur kamu +8.',
     effects: [
-      growth('Ekonomi',      10, 'Blusukan Kampanye'),
+      growth('Ekonomi',      12, 'Blusukan Kampanye'),
       growth('Infrastruktur',  8, 'Blusukan Kampanye'),
     ],
   },
@@ -1189,9 +1189,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Infrastruktur kamu +16.',
+    description: 'Infrastruktur kamu +18.',
     effects: [
-      growth('Infrastruktur', 16, 'Janji Infrastruktur'),
+      growth('Infrastruktur', 18, 'Janji Infrastruktur'),
     ],
   },
 
@@ -1201,9 +1201,9 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Kesehatan kamu +14.',
+    description: 'Kesehatan kamu +16.',
     effects: [
-      growth('Kesehatan', 14, 'Kartu Indonesia Sehat'),
+      growth('Kesehatan', 16, 'Kartu Indonesia Sehat'),
     ],
   },
 
@@ -1213,10 +1213,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Infrastruktur kamu +20, Ekonomi kamu −14.',
+    description: 'Infrastruktur kamu +14, Ekonomi kamu −8.',
     effects: [
-      growth('Infrastruktur', 20, 'IKN Nusantara'),
-      growth('Ekonomi',      -14, 'IKN Nusantara'),
+      growth('Infrastruktur', 14, 'IKN Nusantara'),
+      growth('Ekonomi',       -8, 'IKN Nusantara'),
     ],
   },
 
@@ -1239,10 +1239,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Ekonomi lawan −10, Pendidikan lawan −8.',
+    description: 'Ekonomi lawan −16, Pendidikan lawan −12.',
     effects: [
-      decay('Ekonomi',    -10, 'Serangan Balik Santai'),
-      decay('Pendidikan',  -8, 'Serangan Balik Santai'),
+      decay('Ekonomi',    -16, 'Serangan Balik Santai'),
+      decay('Pendidikan', -12, 'Serangan Balik Santai'),
     ],
   },
 
@@ -1252,10 +1252,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Passive berikutnya lawan tidak berdampak; Pendidikan lawan −8.',
+    description: 'Passive berikutnya lawan tidak berdampak; semua aspek lawan −3.',
     effects: [
       fx('nullify_next_passive', 'all', 'opponent', 0, 'flat', -1, 'onPlay', 'Buzzer Army Deploy'),
-      decay('Pendidikan', -8, 'Buzzer Army Deploy'),
+      decay('all', -3, 'Buzzer Army Deploy'),
     ],
   },
 
@@ -1265,10 +1265,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Ekonomi lawan −12, Keamanan lawan −10.',
+    description: 'Ekonomi lawan −18, Keamanan lawan −14.',
     effects: [
-      decay('Ekonomi',  -12, 'Framing Negatif Lawan'),
-      decay('Keamanan', -10, 'Framing Negatif Lawan'),
+      decay('Ekonomi',  -18, 'Framing Negatif Lawan'),
+      decay('Keamanan', -14, 'Framing Negatif Lawan'),
     ],
   },
 
@@ -1291,10 +1291,10 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Pendidikan kamu +9, Ekonomi lawan −8.',
+    description: 'Pendidikan kamu +9, semua aspek lawan −2.',
     effects: [
       growth('Pendidikan', 9, 'Narasi Anti-Elite'),
-      decay('Ekonomi',    -8, 'Narasi Anti-Elite'),
+      decay('all',        -2, 'Narasi Anti-Elite'),
     ],
   },
 
@@ -1343,9 +1343,9 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Infrastruktur kamu +7/giliran selama 4 giliran.',
+    description: 'Infrastruktur kamu +9/giliran selama 4 giliran.',
     effects: [
-      aura('Infrastruktur', 7, 4, 'Narasi Pembangunan'),
+      aura('Infrastruktur', 9, 4, 'Narasi Pembangunan'),
     ],
   },
 
@@ -1393,9 +1393,10 @@ const ALL_CARDS = [
     type: 'passive',
     isFoulPlay: false,
     owner: 'jokowi',
-    description: 'Duplikasi efek tick positif terkuat yang aktif di papan kamu pada durasi penuh.',
+    description: 'Semua aspek kamu +4 seketika; tarik 1 kartu.',
     effects: [
-      fx('copy_own_effect', 'all', 'self', 0, 'flat', 0, 'onPlay', 'Blusukan Media'),
+      growth('all', 4, 'Blusukan Media'),
+      draw(1, 'Blusukan Media'),
     ],
   },
 
@@ -1420,11 +1421,11 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: true,
     owner: 'jokowi',
-    description: 'Semua aspek kamu +12; semua aspek lawan −10; kunci slot foul play lawan 4 giliran; duplikasi efek passive terkuat di papan kamu.',
+    description: 'Semua aspek kamu +12; semua aspek lawan −10; kunci slot foul play lawan 3 giliran; duplikasi efek passive terkuat di papan kamu.',
     effects: [
       growth('all', 12, 'Dinasti Politik'),
       fx('decay', 'all', 'opponent', -10, 'flat', 0, 'onPlay', 'Dinasti Politik'),
-      fx('lock_foulplay_slot', 'all', 'opponent', 0, 'flat', 4, 'onPlay', 'Dinasti Politik'),
+      fx('lock_foulplay_slot', 'all', 'opponent', 0, 'flat', 3, 'onPlay', 'Dinasti Politik'),
       fx('copy_own_effect', 'all', 'self', 0, 'flat', 0, 'onPlay', 'Dinasti Politik'),
     ],
   },
@@ -1435,11 +1436,11 @@ const ALL_CARDS = [
     type: 'active',
     isFoulPlay: true,
     owner: 'jokowi',
-    description: 'Tukar aspek tertinggi dan terendah lawan; aspek tertinggi kamu +20; lawan tidak bisa menarik kartu 3 giliran; semua efek aktif lawan dihapus.',
+    description: 'Tukar aspek tertinggi dan terendah lawan; aspek tertinggi kamu +20; lawan tidak bisa menarik kartu 2 giliran; semua efek aktif lawan dihapus.',
     effects: [
       fx('swap_aspects',      'all', 'opponent', 0,  'flat', 0, 'onPlay', 'Raja Tanpa Mahkota'),
       fx('top_aspect_boost',  'all', 'self',     20, 'flat', 0, 'onPlay', 'Raja Tanpa Mahkota'),
-      fx('block_draw',        'all', 'opponent', 0,  'flat', 3, 'onPlay', 'Raja Tanpa Mahkota'),
+      fx('block_draw',        'all', 'opponent', 0,  'flat', 2, 'onPlay', 'Raja Tanpa Mahkota'),
       fx('nullify_effect_stack','all','opponent', 0,  'flat', 0, 'onPlay', 'Raja Tanpa Mahkota'),
     ],
   },
