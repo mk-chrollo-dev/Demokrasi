@@ -110,7 +110,7 @@ function preloadAll(onProgress, onComplete) {
     Konva.Image.fromURL(ASSETS[key], (node) => {
       window.IMG[key] = node.image();
       loaded++;
-      onProgress(loaded / keys.length);
+      onProgress((loaded + failed) / keys.length);
       if (loaded + failed === keys.length) onComplete();
     }, () => {
       // silently continue if asset missing
@@ -605,7 +605,7 @@ const LOG_MAX = 8;
 let logGroup = null;
 
 function buildLog() {
-  const lx = LAYOUT.center.x + 10, ly = LAYOUT.center.y + 580;
+  const lx = LAYOUT.center.x + 10, ly = LAYOUT.center.y + 554;
   logGroup = new Konva.Group({ x: lx, y: ly });
   L.ui.add(logGroup);
 }
@@ -678,7 +678,7 @@ function showEndScreen(data) {
       const ry = py + 60 + i * 82;
 
       const row = new Konva.Group({ opacity: 0 });
-      const aspImg = window.IMG['asp_' + asp.toLowerCase().slice(0, 3)];
+      const aspImg = window.IMG[ASP_ICON[asp]];
       if (aspImg) row.add(new Konva.Image({ image: aspImg, x: px + 20, y: ry, width: 20, height: 20 }));
       row.add(new Konva.Text({ x: px + 48, y: ry + 3, text: asp, fontSize: 13, fontFamily: 'monospace', fill: '#FFF' }));
       row.add(new Konva.Text({ x: px + 48, y: ry + 20, text: `Weight: ${w}%`, fontSize: 11, fontFamily: 'monospace', fill: '#FFD700' }));
@@ -696,8 +696,8 @@ function showEndScreen(data) {
   setTimeout(() => {
     const winner = finalScores?.winner;
     const isWinner = winner === myRole;
-    const myScore = finalScores?.[myRole]?.toFixed(2) || '?';
-    const oppScore = finalScores?.[myRole === 'p1' ? 'p2' : 'p1']?.toFixed(2) || '?';
+    const myScore = (finalScores?.[myRole + 'Score'] ?? 0).toFixed(2);
+    const oppScore = (finalScores?.[(myRole === 'p1' ? 'p2' : 'p1') + 'Score'] ?? 0).toFixed(2);
 
     const box = new Konva.Group({ opacity: 0 });
     box.add(new Konva.Rect({ x: px + 16, y: py + 536, width: 568, height: 56, fill: isWinner ? '#0D3B0D' : '#3B0D0D', stroke: isWinner ? '#2ECC71' : '#E74C3C', strokeWidth: 2, cornerRadius: 4 }));
