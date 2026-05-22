@@ -72,24 +72,26 @@ function getCardData(instanceId) {
 function getEffectLines(cardData) {
   const lines = [];
   for (const e of (cardData.effects || [])) {
-    const asp  = e.target === 'all' ? 'Semua aspek' : e.target;
-    const sign = (e.delta || 0) > 0 ? '+' : '';
+    const asp   = (e.target && e.target !== 'all') ? e.target : 'Semua aspek';
+    const delta = e.delta ?? 0;
+    const dur   = e.durationTurns ?? 0;
+    const sign  = delta > 0 ? '+' : '';
     switch (e.type) {
-      case 'growth':  lines.push(`${asp} ${sign}${e.delta}`); break;
-      case 'decay':   lines.push(`Lawan: ${asp} ${e.delta}`); break;
-      case 'aura':    lines.push(`${asp} ${sign}${e.delta} selama ${e.durationTurns} giliran`); break;
+      case 'growth':  lines.push(`${asp} ${sign}${delta}`); break;
+      case 'decay':   lines.push(`Lawan: ${asp} ${delta}`); break;
+      case 'aura':    lines.push(`${asp} ${sign}${delta}/giliran × ${dur}`); break;
       case 'cleanse': lines.push('Bersihkan efek negatif'); break;
-      case 'draw':    lines.push(`Tarik ${e.delta} kartu`); break;
+      case 'draw':    if (delta) lines.push(`Tarik ${delta} kartu`); break;
       case 'skip':    lines.push('Lawan: lewati giliran'); break;
       case 'amplify': lines.push('Kartu AKSI berikutnya ×1.5'); break;
-      case 'shield':  lines.push(`Blokir efek negatif (${e.durationTurns} giliran)`); break;
+      case 'shield':  lines.push(`Blokir efek negatif × ${dur}`); break;
       case 'multi_steal':          lines.push('Curi aspek dari lawan'); break;
       case 'swap_aspects':         lines.push('Tukar semua aspek dengan lawan'); break;
       case 'hostile_cleanse':      lines.push('Hapus efek positif lawan'); break;
-      case 'force_discard_hand':   lines.push('Lawan: buang semua kartu di tangan'); break;
+      case 'force_discard_hand':   lines.push('Lawan: buang semua kartu'); break;
       case 'lock_foulplay_slot':   lines.push('Lawan: slot Foul Play terkunci'); break;
-      case 'block_active_play':    lines.push(`Lawan: tidak bisa AKSI (${e.durationTurns} giliran)`); break;
-      case 'block_passive_play':   lines.push(`Lawan: tidak bisa PASIF (${e.durationTurns} giliran)`); break;
+      case 'block_active_play':    lines.push(`Lawan: blokir kartu AKSI × ${dur}`); break;
+      case 'block_passive_play':   lines.push(`Lawan: blokir kartu PASIF × ${dur}`); break;
       case 'block_draw':           lines.push('Lawan: tidak bisa tarik kartu'); break;
       case 'peek_deck':            lines.push('Lihat 2 kartu teratas deck lawan'); break;
       case 'nullify_next_passive': lines.push('Batalkan PASIF lawan berikutnya'); break;
@@ -98,7 +100,7 @@ function getEffectLines(cardData) {
       default: break;
     }
   }
-  return lines;
+  return lines.filter(Boolean);
 }
 
 const ICON_SYMBOL = {
@@ -190,6 +192,11 @@ function drawBackground() {
     fillRadialGradientEndPoint:{x:STAGE_W/2,y:STAGE_H/2}, fillRadialGradientEndRadius:STAGE_W*.72,
     fillRadialGradientColorStops:[0,'rgba(0,0,0,0)',.5,'rgba(0,0,0,0)',1,'rgba(0,0,10,.5)'],
   }));
+  // Zone labels
+  L.bg.add(new Konva.Text({ x:0, y:LAYOUT.oppHand.y+4, width:STAGE_W,
+    text:'▼  TANGAN LAWAN', fontSize:9, fontFamily:'monospace', fill:'#1A2A40', align:'center', listening:false }));
+  L.bg.add(new Konva.Text({ x:0, y:LAYOUT.myHand.y+4, width:STAGE_W,
+    text:'▲  TANGAN KAMU', fontSize:9, fontFamily:'monospace', fill:'#1A2A40', align:'center', listening:false }));
   L.bg.draw();
 }
 
@@ -198,13 +205,19 @@ function makeCard(cardData, faceUp = true, interactive = false, onClick = null, 
   const g = new Konva.Group({ width:CARD.w, height:CARD.h, listening: faceUp && interactive });
 
   if (!faceUp || !cardData) {
-    // Card back — diagonal pattern
-    g.add(new Konva.Rect({ width:CARD.w, height:CARD.h, fill:'#070818', stroke:'#18104A', strokeWidth:2, cornerRadius:5 }));
-    for (let d = -CARD.h; d < CARD.w + CARD.h; d += 10)
-      g.add(new Konva.Line({ points:[d,0,d+CARD.h,CARD.h], stroke:'#0C0A20', strokeWidth:1, listening:false }));
+    // Card back — looks like a real card back
+    g.add(new Konva.Rect({ width:CARD.w, height:CARD.h, fill:'#0C1028', stroke:'#2A1880', strokeWidth:2, cornerRadius:5 }));
+    // Inner border frame
+    g.add(new Konva.Rect({ x:5, y:5, width:CARD.w-10, height:CARD.h-10, fill:'transparent', stroke:'#16104A', strokeWidth:1, cornerRadius:3 }));
+    // Cross-hatch pattern
+    for (let d = 5; d < CARD.w+CARD.h; d += 14)
+      g.add(new Konva.Line({ points:[d,5,5,d], stroke:'#100E38', strokeWidth:1, listening:false }));
+    for (let d = 0; d < CARD.w+CARD.h; d += 14)
+      g.add(new Konva.Line({ points:[d,CARD.h-5,CARD.w-5,d], stroke:'#100E38', strokeWidth:1, listening:false }));
+    // Center emblem
     const cx = CARD.w/2, cy = CARD.h/2;
-    g.add(new Konva.RegularPolygon({ x:cx, y:cy, sides:4, radius:14, fill:'transparent', stroke:'#1E145A', strokeWidth:1, rotation:45 }));
-    g.add(new Konva.Text({ x:cx-8, y:cy-10, width:16, text:'✦', fontSize:14, fontFamily:'monospace', fill:'#2A1870', align:'center' }));
+    g.add(new Konva.Circle({ x:cx, y:cy, radius:18, fill:'#0A0826', stroke:'#2A1880', strokeWidth:1.5 }));
+    g.add(new Konva.Text({ x:cx-10, y:cy-13, width:20, text:'✦', fontSize:16, fontFamily:'monospace', fill:'#2A1880', align:'center' }));
     return g;
   }
 
@@ -276,7 +289,7 @@ function makeCard(cardData, faceUp = true, interactive = false, onClick = null, 
       hideCardTooltip();
       L.hands.draw();
     });
-    g.on('click', () => onClick(cardData));
+    g.on('click', () => { hideCardTooltip(); document.body.style.cursor='default'; onClick(cardData); });
   }
   return g;
 }
@@ -345,16 +358,27 @@ function renderHand(cardsOrCount, area, faceUp, interactive, lockedTypes = [], c
   const startY = area.y + (area.h - CARD.h) / 2;
 
   if (!faceUp) {
-    for (let i = 0; i < vis; i++) {
+    // Show cards as a fanned stack — offset each card slightly for depth illusion
+    const stackCount = Math.min(vis, 6);
+    const stackStep  = Math.min(step * 0.65, 22);
+    const stackTotalW = CARD.w + (stackCount - 1) * stackStep;
+    const stackStartX = area.x + (area.w - stackTotalW) / 2;
+    for (let i = 0; i < stackCount; i++) {
       const c = makeCard(null, false);
-      c.name(cls); c.x(startX + i * step); c.y(startY); L.hands.add(c);
+      c.name(cls);
+      c.x(stackStartX + i * stackStep);
+      c.y(startY + (stackCount - 1 - i) * 1.5); // slight vertical stagger
+      c.zIndex(i);
+      L.hands.add(c);
     }
-    if (count > vis) {
-      L.hands.add(new Konva.Text({
-        name:cls, x:startX + vis * step + 6, y:startY + CARD.h/2 - 10,
-        text:`+${count - vis}`, fontSize:14, fontFamily:'monospace', fill:C.muted,
-      }));
-    }
+    // Count badge overlaid on top card
+    const badgeX = stackStartX + (stackCount - 1) * stackStep + CARD.w/2 - 18;
+    const badgeY = startY - 2;
+    const badge = new Konva.Group({ name:cls });
+    badge.add(new Konva.Rect({ width:36, height:22, fill:'#1A2A40', stroke:'#2A3A54', strokeWidth:1, cornerRadius:11 }));
+    badge.add(new Konva.Text({ width:36, height:22, text:`${count}`, fontSize:13, fontFamily:'monospace', fontStyle:'bold', fill:C.text, align:'center', verticalAlign:'middle' }));
+    badge.x(badgeX); badge.y(badgeY);
+    L.hands.add(badge);
     L.hands.draw(); return;
   }
 
@@ -368,6 +392,8 @@ function renderHand(cardsOrCount, area, faceUp, interactive, lockedTypes = [], c
 
     const handleClick = (c) => {
       if (!canClick) return;
+      hideCardTooltip();
+      document.body.style.cursor = 'default';
       if (c.isFoulPlay) {
         window.client.loadFoulPlay(c.instanceId);
       } else {
@@ -695,12 +721,12 @@ function updateActionBar(state, myRole) {
     const parts = effs.slice(0,5).map(e => {
       const asp = e.target === 'all' ? 'Semua' : e.target;
       const dur = e.durationTurns > 0 ? ` [${e.durationTurns}×]` : '';
-      if (e.type === 'aura')              return `⏱ ${asp} +${e.delta}/giliran${dur}`;
+      if (e.type === 'aura')              return `⏱ ${asp} +${e.delta ?? 0}/giliran${dur}`;
       if (e.type === 'amplify')           return `⚡ AKSI berikutnya ×1.5`;
       if (e.type === 'shield')            return `◯ Blokir negatif${dur}`;
       if (e.type === 'block_active_play') return `⛔ Tidak bisa AKSI${dur}`;
       if (e.type === 'block_passive_play')return `⛔ Tidak bisa PASIF${dur}`;
-      return `${e.type}${dur}`;
+      return `${e.type.replace(/_/g,' ')}${dur}`;
     });
     AB.efx.text('EFEK AKTIF:  ' + parts.join('   '));
     AB.efx.fill(C.text);
@@ -736,7 +762,10 @@ function updateActionBar(state, myRole) {
     _endTurnAnim.stop(); _endTurnAnim = null; endTurnBtn.opacity(.3);
   }
 
-  activateBtn.visible(isMyTurn && !!fpId && !fpLocked);
+  const fpBtnVisible = isMyTurn && !!fpId && !fpLocked;
+  activateBtn.visible(fpBtnVisible);
+  AB.fpLbl.visible(!fpBtnVisible);
+  AB.fpName.visible(!fpBtnVisible);
   L.ui.draw();
 }
 
