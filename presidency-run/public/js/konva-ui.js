@@ -166,6 +166,73 @@ function drawBackground() {
   L.bg.draw();
 }
 
+// ── Card tooltip (DOM overlay, outside Konva) ─────────────────────────────
+
+let _tooltipEl = null;
+
+function _ensureTooltip() {
+  if (_tooltipEl) return _tooltipEl;
+  _tooltipEl = document.createElement('div');
+  Object.assign(_tooltipEl.style, {
+    position: 'fixed', zIndex: '9999', pointerEvents: 'none',
+    background: '#0A0A1A', border: '1px solid #FFD700', borderRadius: '6px',
+    padding: '10px 12px', maxWidth: '220px', fontFamily: 'monospace',
+    fontSize: '11px', color: '#CCC', lineHeight: '1.5',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.8)', display: 'none',
+  });
+  document.body.appendChild(_tooltipEl);
+  return _tooltipEl;
+}
+
+function _effectChip(e) {
+  const LABELS = {
+    growth: '▲', decay: '▼', aura: '✦ aura', shield: '🛡', amplify: '⚡ amplify',
+    skip: '⏭ skip', draw: '🃏 draw', cleanse: '🧹 cleanse',
+    nullify_next_passive: '✗ nullify passive', nullify_effect_stack: '✗ clear effects',
+    block_draw: '🚫 draw', block_active_play: '🚫 active', block_passive_play: '🚫 passive',
+    multi_steal: '↔ steal', swap_aspects: '⇅ swap', hostile_cleanse: '✗ opp cleanse',
+    force_discard_hand: '🗑 discard hand', lock_foulplay_slot: '🔒 FP slot',
+    peek_deck: '👁 peek', copy_own_effect: '⧉ copy effect',
+    reveal_hand_permanent: '👁 reveal hand',
+  };
+  const label = LABELS[e.type] || e.type;
+  let text = label;
+  if (e.delta !== null && e.delta !== 0) text += ` ${e.delta > 0 ? '+' : ''}${e.delta}`;
+  if (e.durationTurns !== null && e.durationTurns > 0) text += ` [${e.durationTurns}t]`;
+  const col = e.delta > 0 ? '#2ECC71' : e.delta < 0 ? '#E74C3C' : '#AAAAAA';
+  return `<span style="display:inline-block;background:#111;border:1px solid #333;border-radius:3px;padding:1px 5px;margin:2px 2px 0 0;color:${col};font-size:10px">${text}</span>`;
+}
+
+function showCardTooltip(cardData, mx, my) {
+  const el = _ensureTooltip();
+  const typeColor = cardData.isFoulPlay ? '#FF6B6B' : cardData.type === 'active' ? '#E74C3C' : '#5DADE2';
+  const typeLabel = cardData.isFoulPlay ? 'FOUL PLAY' : cardData.type === 'active' ? 'ACTIVE' : 'PASSIVE';
+  const chips = (cardData.effects || []).map(_effectChip).join('');
+  const desc = (cardData.description || '').replace(/;(\s*)/g, '<br>• ');
+  el.innerHTML =
+    `<div style="color:#FFD700;font-weight:bold;margin-bottom:4px;font-size:12px">${cardData.name || ''}</div>` +
+    `<div style="color:${typeColor};font-size:9px;margin-bottom:6px;letter-spacing:1px">${typeLabel}</div>` +
+    (chips ? `<div style="margin-bottom:8px">${chips}</div>` : '') +
+    `<div style="color:#999;font-size:10px;border-top:1px solid #1A1A2E;padding-top:6px">${desc || '—'}</div>`;
+  el.style.display = 'block';
+  moveCardTooltip(mx, my);
+}
+
+function moveCardTooltip(mx, my) {
+  if (!_tooltipEl || _tooltipEl.style.display === 'none') return;
+  const pad = 14;
+  const tw = _tooltipEl.offsetWidth, th = _tooltipEl.offsetHeight;
+  let lx = mx + pad, ly = my + pad;
+  if (lx + tw > window.innerWidth)  lx = mx - tw - pad;
+  if (ly + th > window.innerHeight) ly = my - th - pad;
+  _tooltipEl.style.left = lx + 'px';
+  _tooltipEl.style.top  = ly + 'px';
+}
+
+function hideCardTooltip() {
+  if (_tooltipEl) _tooltipEl.style.display = 'none';
+}
+
 // ── Card component ─────────────────────────────────────────────────────────
 
 function makeCard(cardData, faceUp = true, interactive = false, onClick = null) {
@@ -226,8 +293,19 @@ function makeCard(cardData, faceUp = true, interactive = false, onClick = null) 
   }));
 
   if (interactive && onClick) {
-    group.on('mouseover', () => { document.body.style.cursor = 'pointer'; group.to({ scaleX: 1.08, scaleY: 1.08, offsetX: CARD.w * 0.04, offsetY: CARD.h * 0.04, duration: 0.1 }); L.hands.draw(); });
-    group.on('mouseout',  () => { document.body.style.cursor = 'default'; group.to({ scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, duration: 0.1 }); L.hands.draw(); });
+    group.on('mouseover', (e) => {
+      document.body.style.cursor = 'pointer';
+      group.to({ scaleX: 1.08, scaleY: 1.08, offsetX: CARD.w * 0.04, offsetY: CARD.h * 0.04, duration: 0.1 });
+      showCardTooltip(cardData, e.evt.clientX, e.evt.clientY);
+      L.hands.draw();
+    });
+    group.on('mousemove', (e) => moveCardTooltip(e.evt.clientX, e.evt.clientY));
+    group.on('mouseout', () => {
+      document.body.style.cursor = 'default';
+      group.to({ scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, duration: 0.1 });
+      hideCardTooltip();
+      L.hands.draw();
+    });
     group.on('click', () => onClick(cardData));
   } else if (faceUp) {
     group.opacity(0.5);

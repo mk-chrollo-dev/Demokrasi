@@ -56,6 +56,11 @@ app.get('/js/cards-browser.js', (req, res) => {
       owner: card.owner,
       description: card.description || '',
       iconType: getIconType(card),
+      effects: (card.effects || []).map(e => ({
+        type: e.type,
+        delta: e.delta ?? null,
+        durationTurns: e.durationTurns ?? null,
+      })),
     };
   }
   const presData = PRESIDENTS.map(p => ({
