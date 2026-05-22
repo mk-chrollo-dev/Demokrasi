@@ -909,6 +909,21 @@ function buildLog() {
 function appendLog(msg) {
   logEntries.push(msg);
   if (logEntries.length > LOG_MAX) logEntries.shift();
+  if (!logGroup) return; // board not ready yet; entry is buffered in logEntries
+  logGroup.destroyChildren();
+  logEntries.forEach((entry, i) => {
+    logGroup.add(new Konva.Text({
+      x: 0, y: i * 14, width: 740, text: entry,
+      fontSize: 8, fontFamily: 'monospace',
+      fill: i === logEntries.length - 1 ? '#CCCCCC' : '#555',
+      ellipsis: true,
+    }));
+  });
+  L.ui.draw();
+}
+
+function _flushLog() {
+  if (!logGroup || logEntries.length === 0) return;
   logGroup.destroyChildren();
   logEntries.forEach((entry, i) => {
     logGroup.add(new Konva.Text({
@@ -1086,19 +1101,37 @@ function initBoard() {
   console.log('[Konva] Board ready');
 }
 
+// ── Board-ready gate ───────────────────────────────────────────────────────
+// session_restored / game_start arrive before initBoard() completes because
+// the socket reconnects faster than preloadAll finishes. Queue state here
+// and apply it once the board is built.
+
+let _boardReady = false;
+let _pendingRender = null;
+
+function _applyPending() {
+  if (!_pendingRender) return;
+  const { state, logs } = _pendingRender;
+  _pendingRender = null;
+  logs.forEach(m => appendLog(m));
+  if (state) fullRender(state);
+}
+
 // ── Socket event wiring ────────────────────────────────────────────────────
 
 window.client.on('session_restored', ({ playerRole, state }) => {
-  if (state) {
-    (state.actionLog || []).forEach(entry => appendLog(entry));
-    fullRender(state);
-    appendLog(`↩ Session restored as ${playerRole}`);
-  }
+  if (!state) return;
+  const logs = [`↩ Session restored as ${playerRole}`];
+  if (!_boardReady) { _pendingRender = { state, logs }; return; }
+  fullRender(state);
+  logs.forEach(m => appendLog(m));
 });
 
 window.client.on('game_start', ({ state }) => {
+  const logs = ['Permainan dimulai!'];
+  if (!_boardReady) { _pendingRender = { state, logs }; return; }
   fullRender(state);
-  appendLog('Permainan dimulai!');
+  logs.forEach(m => appendLog(m));
 });
 
 window.client.on('state_update', ({ state, logEntry }) => {
@@ -1140,11 +1173,9 @@ preloadAll(
     const scr = document.getElementById('loading-screen');
     if (scr) scr.style.display = 'none';
     initBoard();
+    _boardReady = true;
+    _flushLog();
     applyViewportScale();
-
-    // Restore state if session exists
-    if (window.client.sessionId) {
-      // session_restored fires automatically from client.js constructor
-    }
+    _applyPending();
   }
 );

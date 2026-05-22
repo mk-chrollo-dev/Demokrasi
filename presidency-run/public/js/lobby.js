@@ -159,3 +159,11 @@ document.getElementById('btn-reset-waiting').addEventListener('click', () => {
 // ── Auto-reconnect handling on load ──────────────────────────────────────────
 // If session exists, client.js already emits reconnect_session.
 // The session_restored handler above will navigate to game.html if needed.
+
+// ── Auto-host when launched from Electron HOST button ─────────────────────
+if (new URLSearchParams(window.location.search).get('autohost') === '1') {
+  // Clear any stale session so reconnect doesn't re-enter an old game
+  window.client.clearSession();
+  // Create room once the socket connects
+  window.client.socket.once('connect', () => window.client.createRoom());
+}

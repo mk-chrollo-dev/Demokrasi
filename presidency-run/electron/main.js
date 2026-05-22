@@ -72,7 +72,7 @@ app.whenReady().then(() => {
       }
       launcherWin?.close();
       openGameWindow(
-        `http://localhost:${serverPort}`,
+        `http://localhost:${serverPort}?autohost=1`,
         `Democracy The Game  ·  P2 joins: ${localIP}:${serverPort}`,
       );
     } else {
