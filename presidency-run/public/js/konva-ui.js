@@ -15,6 +15,26 @@ const stage = new Konva.Stage({
   height: STAGE_H,
 });
 
+// Viewport scaling for screens narrower than 1280px
+function applyViewportScale() {
+  const container = document.getElementById('konva-container');
+  if (!container) return;
+  const vw = window.innerWidth;
+  if (vw < STAGE_W) {
+    const s = vw / STAGE_W;
+    stage.width(Math.round(STAGE_W * s));
+    stage.height(Math.round(STAGE_H * s));
+    stage.scale({ x: s, y: s });
+    stage.draw();
+  } else if (stage.scaleX() !== 1) {
+    stage.width(STAGE_W);
+    stage.height(STAGE_H);
+    stage.scale({ x: 1, y: 1 });
+    stage.draw();
+  }
+}
+window.addEventListener('resize', applyViewportScale);
+
 function disableSmoothing(layer) {
   const c = layer.getCanvas()._canvas;
   const ctx = c.getContext('2d');
@@ -340,7 +360,7 @@ function animateCardPlay(sourceGroup, instanceId) {
 
 // ── Hand renderer ──────────────────────────────────────────────────────────
 
-function renderHand(cardsOrCount, area, faceUp, interactive) {
+function renderHand(cardsOrCount, area, faceUp, interactive, lockedTypes = []) {
   L.hands.find('.' + (area === LAYOUT.p1hand ? 'p1hand' : 'p2hand')).forEach(n => n.destroy());
 
   const count = faceUp ? cardsOrCount.length : cardsOrCount;
@@ -368,7 +388,12 @@ function renderHand(cardsOrCount, area, faceUp, interactive) {
   }
 
   cardsOrCount.slice(0, 7).forEach((cardData, i) => {
+    const isCardLocked = interactive && !cardData.isFoulPlay &&
+      ((cardData.type === 'active'  && lockedTypes.includes('active')) ||
+       (cardData.type === 'passive' && lockedTypes.includes('passive')));
+
     const handleClick = (cd) => {
+      if (isCardLocked) return;
       if (cd.isFoulPlay) {
         window.client.loadFoulPlay(cd.instanceId);
       } else {
@@ -377,7 +402,16 @@ function renderHand(cardsOrCount, area, faceUp, interactive) {
         else window.client.playCard(cd.instanceId);
       }
     };
-    const card = makeCard(cardData, true, interactive, interactive ? handleClick : null);
+    const card = makeCard(cardData, true, interactive && !isCardLocked, interactive && !isCardLocked ? handleClick : null);
+    if (isCardLocked) {
+      card.opacity(0.35);
+      // Lock badge overlay
+      const badge = new Konva.Group({ name: className });
+      badge.add(new Konva.Rect({ x: CARD.w / 2 - 18, y: CARD.h / 2 - 10, width: 36, height: 20, fill: '#3B0000', cornerRadius: 3, opacity: 0.9 }));
+      badge.add(new Konva.Text({ x: CARD.w / 2 - 18, y: CARD.h / 2 - 8, width: 36, text: '🔒 LOCKED', fontSize: 6, fontFamily: 'monospace', fill: '#E74C3C', align: 'center' }));
+      badge.x(startX + i * CARD_GAP); badge.y(startY);
+      L.hands.add(badge);
+    }
     card.name(className); card.x(startX + i * CARD_GAP); card.y(startY);
     L.hands.add(card);
   });
@@ -420,10 +454,16 @@ function makeFoulPlaySlot(area, label, isLoaded, isLocked) {
 const ASPECTS = ['Ekonomi', 'Kesehatan', 'Keamanan', 'Pendidikan', 'Infrastruktur'];
 const ASP_ICON = { Ekonomi: 'asp_ekonomi', Kesehatan: 'asp_kesehatan', Keamanan: 'asp_keamanan', Pendidikan: 'asp_pendidikan', Infrastruktur: 'asp_infra' };
 const scoreTexts = { p1: {}, p2: {} };
+const scoreBars  = { p1: {}, p2: {} };
+const BAR_MAX_W  = { p2: 0, p1: 0 }; // set in buildAspectTable
 
 function buildAspectTable() {
   const { x, y } = LAYOUT.aspects;
   const rowH = 48;
+  const mid  = x + LAYOUT.aspects.w / 2;
+
+  BAR_MAX_W.p2 = mid - x - 80;
+  BAR_MAX_W.p1 = x + LAYOUT.aspects.w - (mid + 80);
 
   // Column headers
   L.board.add(new Konva.Text({ x: x + 10, y: y - 18, text: 'P2', fontSize: 11, fontFamily: 'monospace', fill: '#666' }));
@@ -431,7 +471,6 @@ function buildAspectTable() {
 
   ASPECTS.forEach((asp, i) => {
     const ry = y + i * rowH;
-    const mid = x + LAYOUT.aspects.w / 2;
 
     // Icon
     const aspImg = window.IMG[ASP_ICON[asp]];
@@ -458,12 +497,31 @@ function buildAspectTable() {
     });
     L.board.add(scoreTexts.p1[asp]);
 
-    // Bar backgrounds (P2 left, P1 right)
-    L.board.add(new Konva.Rect({ x: x, y: ry + 36, width: mid - x - 80, height: 6, fill: '#1A1A2E', cornerRadius: 2 }));
-    L.board.add(new Konva.Rect({ x: mid + 80, y: ry + 36, width: x + LAYOUT.aspects.w - (mid + 80), height: 6, fill: '#1A1A2E', cornerRadius: 2 }));
+    // Bar backgrounds (P2 left grows left→right, P1 right grows left→right)
+    L.board.add(new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2, height: 6, fill: '#111122', cornerRadius: 2 }));
+    L.board.add(new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1, height: 6, fill: '#111122', cornerRadius: 2 }));
+
+    // Bar fills — start at 50%
+    scoreBars.p2[asp] = new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2 * 0.5, height: 6, fill: '#2ECC71', cornerRadius: 2 });
+    scoreBars.p1[asp] = new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1 * 0.5, height: 6, fill: '#2ECC71', cornerRadius: 2 });
+    L.board.add(scoreBars.p2[asp]);
+    L.board.add(scoreBars.p1[asp]);
   });
 
   L.board.draw();
+}
+
+function tweenBar(barNode, maxW, targetVal) {
+  const targetW = Math.max(2, (Math.min(100, Math.max(0, targetVal)) / 100) * maxW);
+  const startW  = barNode.width();
+  if (Math.abs(startW - targetW) < 0.5) return;
+  const t0 = Date.now(), dur = 400;
+  const anim = new Konva.Animation(() => {
+    const pct = Math.min((Date.now() - t0) / dur, 1);
+    barNode.width(startW + (targetW - startW) * pct);
+    if (pct >= 1) anim.stop();
+  }, L.board);
+  anim.start();
 }
 
 function tweenNumber(textNode, target) {
@@ -484,8 +542,14 @@ function updateAspectScores(state) {
     const p2v = state.players.p2.aspects[asp];
     tweenNumber(scoreTexts.p1[asp], p1v);
     tweenNumber(scoreTexts.p2[asp], p2v);
-    scoreTexts.p1[asp].fill(p1v > p2v ? '#2ECC71' : p1v < p2v ? '#E74C3C' : '#FFF');
-    scoreTexts.p2[asp].fill(p2v > p1v ? '#2ECC71' : p2v < p1v ? '#E74C3C' : '#FFF');
+    const p1col = p1v > p2v ? '#2ECC71' : p1v < p2v ? '#E74C3C' : '#FFFFFF';
+    const p2col = p2v > p1v ? '#2ECC71' : p2v < p1v ? '#E74C3C' : '#FFFFFF';
+    scoreTexts.p1[asp].fill(p1col);
+    scoreTexts.p2[asp].fill(p2col);
+    tweenBar(scoreBars.p1[asp], BAR_MAX_W.p1, p1v);
+    tweenBar(scoreBars.p2[asp], BAR_MAX_W.p2, p2v);
+    scoreBars.p1[asp].fill(p1col);
+    scoreBars.p2[asp].fill(p2col);
   });
   L.board.draw();
 }
@@ -514,10 +578,12 @@ function buildRoundInfo() {
   L.board.draw();
 }
 
+let _sdBorderAnim = null, _sdBorder = null, _sdLabel = null;
+
 function updateRoundInfo(state, myRole) {
   const isMyTurn = state.activePlayer === myRole;
   const isSD = state.isSuddenDeath;
-  RI.round.text(`ROUND ${state.round}${isSD ? '*' : ''} / 7`);
+  RI.round.text(`ROUND ${state.round}${isSD ? ' ★' : ''} / 7`);
   RI.turn.text(`TURN ${state.turn} / 5`);
   RI.active.text(isMyTurn ? 'YOUR TURN' : 'OPPONENT');
   RI.active.fill(isMyTurn ? '#2ECC71' : '#E74C3C');
@@ -526,6 +592,67 @@ function updateRoundInfo(state, myRole) {
     if (window.IMG[k]) pip.image(window.IMG[k]);
   });
   L.board.draw();
+
+  // Sudden death pulsing red border + badge
+  if (isSD && !_sdBorder) {
+    _sdBorder = new Konva.Rect({ x: 1, y: 1, width: STAGE_W - 2, height: STAGE_H - 2, stroke: '#E74C3C', strokeWidth: 4, listening: false, cornerRadius: 2 });
+    _sdLabel  = new Konva.Text({
+      x: STAGE_W / 2 - 80, y: LAYOUT.ticker.h + 4, width: 160,
+      text: '⚡ SUDDEN DEATH ⚡', fontSize: 10, fontFamily: 'monospace', fontStyle: 'bold',
+      fill: '#E74C3C', align: 'center', listening: false,
+    });
+    L.effects.add(_sdBorder);
+    L.effects.add(_sdLabel);
+    _sdBorderAnim = new Konva.Animation((frame) => {
+      const pulse = 0.35 + 0.65 * Math.abs(Math.sin(frame.time * 0.0025));
+      _sdBorder.opacity(pulse);
+      _sdLabel.opacity(pulse);
+    }, L.effects);
+    _sdBorderAnim.start();
+  } else if (!isSD && _sdBorder) {
+    if (_sdBorderAnim) { _sdBorderAnim.stop(); _sdBorderAnim = null; }
+    _sdBorder.destroy(); _sdBorder = null;
+    if (_sdLabel) { _sdLabel.destroy(); _sdLabel = null; }
+    L.effects.draw();
+  }
+
+  // News event flash — highlight the affected aspect row briefly
+  if (state.lastNewsEvent && state.lastNewsEvent !== window._lastNewsEventShown) {
+    window._lastNewsEventShown = state.lastNewsEvent;
+    flashNewsAspect(state.lastNewsEvent);
+  }
+}
+
+let _newsFlashAnim = null;
+function flashNewsAspect(evt) {
+  if (_newsFlashAnim) { _newsFlashAnim.stop(); }
+  const { x, y } = LAYOUT.aspects;
+  const rowH = 48;
+  const aspIdx = ASPECTS.indexOf(evt.aspect);
+  if (aspIdx < 0) return;
+
+  const ry = y + aspIdx * rowH;
+  const arrow = evt.direction === 'up' ? '▲' : '▼';
+  const col   = evt.direction === 'up' ? '#F39C12' : '#E74C3C';
+
+  const flash = new Konva.Group();
+  flash.add(new Konva.Rect({ x: x, y: ry, width: LAYOUT.aspects.w, height: rowH - 2, fill: col, opacity: 0.18, cornerRadius: 2 }));
+  flash.add(new Konva.Text({
+    x: x + LAYOUT.aspects.w / 2 - 60, y: ry + 14, width: 120,
+    text: `${arrow} ${evt.aspect} weight`, fontSize: 10, fontFamily: 'monospace',
+    fill: col, align: 'center', fontStyle: 'bold',
+  }));
+  L.effects.add(flash);
+  L.effects.draw();
+
+  const t0 = Date.now();
+  _newsFlashAnim = new Konva.Animation(() => {
+    const elapsed = Date.now() - t0;
+    if (elapsed > 2800) { flash.destroy(); L.effects.draw(); _newsFlashAnim.stop(); return; }
+    flash.opacity(elapsed < 2200 ? 1 : 1 - (elapsed - 2200) / 600);
+    L.effects.draw();
+  }, L.effects);
+  _newsFlashAnim.start();
 }
 
 // ── Player label panels ────────────────────────────────────────────────────
@@ -590,8 +717,14 @@ function buildActionButtons() {
   L.ui.add(endTurnBtn);
 
   activateBtn = makeButton('ACTIVATE FOUL PLAY', LAYOUT.activate.x, LAYOUT.activate.y, LAYOUT.activate.w, LAYOUT.activate.h, 'danger', () => {
+    const state = window._gameState;
+    const myRole = window.client?.playerRole;
+    const fpSlotId = state?.players?.[myRole]?.foulPlaySlot;
+    const card = fpSlotId ? getCardData(fpSlotId) : null;
     const risk = getRiskPercent();
-    if (confirm(`ACTIVATE FOUL PLAY\nBackfire risk: ${risk}%\n${risk >= 50 ? '⚠ WARNING: You may lose instantly!' : 'Proceed?'}`)) {
+    const cardLine = card ? `\n${card.name}\n"${card.description}"\n` : '';
+    const warnLine = risk >= 50 ? '\n⚠ BAHAYA: Kamu bisa kalah seketika!' : '';
+    if (confirm(`AKTIFKAN FOUL PLAY?${cardLine}\nRisiko backfire: ${risk}%${warnLine}`)) {
       window.client.activateFoulPlay();
     }
   });
@@ -791,6 +924,12 @@ function showEndScreen(data) {
     if (myRole === 'p1') {
       const replayBtn = makeButton('PLAY AGAIN', STAGE_W / 2 - 70, py + 620, 140, 36, 'normal', () => { window.client.resetRoom(); window.location.href = '/'; });
       panel.add(replayBtn);
+    } else {
+      panel.add(new Konva.Text({
+        x: px + 16, y: py + 626, width: 568,
+        text: 'Menunggu P1 untuk memulai ulang permainan...',
+        fontSize: 12, fontFamily: 'monospace', fill: '#666', align: 'center',
+      }));
     }
     L.ui.draw();
   }, delay * (shuffled.length + 1) + 600);
@@ -812,18 +951,32 @@ function fullRender(state) {
   updatePlayerLabels(state, myRole);
   renderEffects(state, myRole);
 
+  // Determine which card types are locked for me this turn
+  const myLockedTypes = [];
+  if (isMyTurn) {
+    if ((myPlayer.activeEffects || []).some(e => e.type === 'block_active_play'  && (e.durationTurns || 0) > 0)) myLockedTypes.push('active');
+    if ((myPlayer.activeEffects || []).some(e => e.type === 'block_passive_play' && (e.durationTurns || 0) > 0)) myLockedTypes.push('passive');
+  }
+
   // My hand (face up, interactive on my turn)
   const myHandData = (myPlayer.hand || []).map(getCardData).filter(Boolean);
-  renderHand(myHandData, LAYOUT.p1hand, true, isMyTurn);
+  renderHand(myHandData, LAYOUT.p1hand, true, isMyTurn, myLockedTypes);
 
-  // Opponent's hand (face down)
+  // Opponent's hand (face down, but face-up if handRevealed)
   const oppHandCount = (oppPlayer.hand || []).length;
-  renderHand(oppHandCount, LAYOUT.p2hand, false, false);
+  if (oppPlayer.handRevealed) {
+    const oppHandData = (oppPlayer.hand || []).map(getCardData).filter(Boolean);
+    renderHand(oppHandData, LAYOUT.p2hand, true, false, []);
+  } else {
+    renderHand(oppHandCount, LAYOUT.p2hand, false, false, []);
+  }
 
-  // FP slots
+  // FP slots — show lock status
+  const myFPLocked  = (myPlayer.activeEffects  || []).some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
+  const oppFPLocked = (oppPlayer.activeEffects || []).some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
   L.play.destroyChildren();
-  const myFP  = makeFoulPlaySlot(LAYOUT.p1fp, 'MY FOUL PLAY', !!myPlayer.foulPlaySlot, false);
-  const oppFP = makeFoulPlaySlot(LAYOUT.p2fp, 'OPP FOUL PLAY', !!oppPlayer.foulPlaySlot, false);
+  const myFP  = makeFoulPlaySlot(LAYOUT.p1fp, 'MY FOUL PLAY', !!myPlayer.foulPlaySlot, myFPLocked);
+  const oppFP = makeFoulPlaySlot(LAYOUT.p2fp, 'OPP FOUL PLAY', !!oppPlayer.foulPlaySlot, oppFPLocked);
   L.play.add(myFP);
   L.play.add(oppFP);
   L.play.draw();
@@ -849,7 +1002,11 @@ function initBoard() {
 // ── Socket event wiring ────────────────────────────────────────────────────
 
 window.client.on('session_restored', ({ playerRole, state }) => {
-  if (state) fullRender(state);
+  if (state) {
+    (state.actionLog || []).forEach(entry => appendLog(entry));
+    fullRender(state);
+    appendLog(`↩ Session restored as ${playerRole}`);
+  }
 });
 
 window.client.on('game_start', ({ state }) => {
@@ -896,6 +1053,7 @@ preloadAll(
     const scr = document.getElementById('loading-screen');
     if (scr) scr.style.display = 'none';
     initBoard();
+    applyViewportScale();
 
     // Restore state if session exists
     if (window.client.sessionId) {
