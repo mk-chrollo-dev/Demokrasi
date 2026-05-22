@@ -68,8 +68,17 @@ const LAYOUT = {
   activate:  { x: 1090, y: 546, w: 180,  h: 46  },
 };
 
-const CARD = { w: 86, h: 120 };
-const CARD_GAP = 22;
+const CARD = { w: 96, h: 134 };
+const CARD_GAP = 24;
+
+// Per-president glow colors for card hover
+const PRES_GLOW_COLOR = { soekarno: '#C0392B', soeharto: '#6D8B2A', megawati: '#C0396A', prabowo: '#4A7090', jokowi: '#1A6FD4' };
+
+function healthColor(val) {
+  if (val <= 20) return '#E74C3C';
+  if (val <= 35) return '#E67E22';
+  return '#2ECC71';
+}
 
 // ── Assets ────────────────────────────────────────────────────────────────
 
@@ -183,6 +192,16 @@ function drawBackground() {
       fillPatternScale: { x: 4, y: 4 },
     }));
   }
+  // Radial vignette overlay — darkens edges to focus attention on board center
+  L.bg.add(new Konva.Rect({
+    x: 0, y: 0, width: STAGE_W, height: STAGE_H,
+    fillRadialGradientStartPoint:  { x: STAGE_W / 2, y: STAGE_H / 2 },
+    fillRadialGradientStartRadius: 0,
+    fillRadialGradientEndPoint:    { x: STAGE_W / 2, y: STAGE_H / 2 },
+    fillRadialGradientEndRadius:   Math.max(STAGE_W, STAGE_H) * 0.75,
+    fillRadialGradientColorStops:  [0, 'rgba(0,0,0,0)', 0.55, 'rgba(0,0,0,0)', 1, 'rgba(0,0,10,0.70)'],
+    listening: false,
+  }));
   L.bg.draw();
 }
 
@@ -259,11 +278,19 @@ function makeCard(cardData, faceUp = true, interactive = false, onClick = null) 
   const group = new Konva.Group({ width: CARD.w, height: CARD.h, listening: faceUp && interactive });
 
   if (!faceUp || !cardData) {
-    const back = new Konva.Image({ image: window.IMG['card_back'], width: CARD.w, height: CARD.h });
     if (!window.IMG['card_back']) {
-      group.add(new Konva.Rect({ width: CARD.w, height: CARD.h, fill: '#1A0A0A', stroke: '#5C0000', strokeWidth: 2, cornerRadius: 4 }));
+      // Geometric card back fallback
+      group.add(new Konva.Rect({ width: CARD.w, height: CARD.h, fill: '#0A0618', stroke: '#3A0070', strokeWidth: 2, cornerRadius: 4 }));
+      group.add(new Konva.Rect({ x: 5, y: 5, width: CARD.w - 10, height: CARD.h - 10, fill: 'transparent', stroke: '#1E0040', strokeWidth: 1, cornerRadius: 2 }));
+      for (let gx = 16; gx < CARD.w - 5; gx += 16)
+        group.add(new Konva.Line({ points: [gx, 5, gx, CARD.h - 5], stroke: '#150030', strokeWidth: 1 }));
+      for (let gy = 16; gy < CARD.h - 5; gy += 16)
+        group.add(new Konva.Line({ points: [5, gy, CARD.w - 5, gy], stroke: '#150030', strokeWidth: 1 }));
+      const cx = CARD.w / 2, cy = CARD.h / 2;
+      group.add(new Konva.Circle({ x: cx, y: cy, radius: 14, fill: '#150030', stroke: '#6B00AA', strokeWidth: 1 }));
+      group.add(new Konva.Text({ x: cx - 8, y: cy - 9, width: 16, height: 18, text: '✦', fontSize: 12, fill: '#9B59B6', align: 'center' }));
     } else {
-      group.add(back);
+      group.add(new Konva.Image({ image: window.IMG['card_back'], width: CARD.w, height: CARD.h }));
     }
     return group;
   }
@@ -289,46 +316,51 @@ function makeCard(cardData, faceUp = true, interactive = false, onClick = null) 
 
   // Type badge
   const isActive = cardData.type === 'active';
-  group.add(new Konva.Rect({ x: CARD.w / 2 - 22, y: 26, width: 44, height: 10, fill: cardData.isFoulPlay ? '#3B0000' : isActive ? '#5C0000' : '#0D2144', cornerRadius: 2 }));
+  const badgeFill  = cardData.isFoulPlay ? '#3B0000' : isActive ? '#5C0000' : '#0D2144';
+  const badgeColor = cardData.isFoulPlay ? '#FF6B6B' : isActive ? '#FF9999' : '#7FB8F0';
+  group.add(new Konva.Rect({ x: CARD.w / 2 - 24, y: 26, width: 48, height: 12, fill: badgeFill, cornerRadius: 2 }));
   group.add(new Konva.Text({
-    x: CARD.w / 2 - 22, y: 27, width: 44, height: 10,
+    x: CARD.w / 2 - 24, y: 28, width: 48, height: 10,
     text: cardData.isFoulPlay ? 'FOUL PLAY' : isActive ? 'ACTIVE' : 'PASSIVE',
-    fontSize: 6, fontFamily: 'monospace',
-    fill: cardData.isFoulPlay ? '#FF6B6B' : '#CCCCCC', align: 'center',
+    fontSize: 7, fontFamily: 'monospace', fontStyle: 'bold',
+    fill: badgeColor, align: 'center',
   }));
 
   // Description
   group.add(new Konva.Text({
-    x: 4, y: 40, width: CARD.w - 8, height: 52,
+    x: 4, y: 42, width: CARD.w - 8, height: 60,
     text: cardData.description || '',
-    fontSize: 6, fontFamily: 'monospace', fill: '#AAAAAA', wrap: 'word', ellipsis: true,
+    fontSize: 7, fontFamily: 'monospace', fill: '#999', wrap: 'word', ellipsis: true,
   }));
 
   // Bottom name strip
-  group.add(new Konva.Rect({ x: 0, y: CARD.h - 26, width: CARD.w, height: 26, fill: 'rgba(0,0,0,0.75)', cornerRadius: [0, 0, 3, 3] }));
+  group.add(new Konva.Rect({ x: 0, y: CARD.h - 30, width: CARD.w, height: 30, fill: 'rgba(0,0,0,0.85)', cornerRadius: [0, 0, 3, 3] }));
   group.add(new Konva.Text({
-    x: 4, y: CARD.h - 24, width: CARD.w - 8, height: 22,
-    text: cardData.name || '', fontSize: 7, fontFamily: 'monospace', fontStyle: 'bold',
+    x: 4, y: CARD.h - 28, width: CARD.w - 8, height: 26,
+    text: cardData.name || '', fontSize: 9, fontFamily: 'monospace', fontStyle: 'bold',
     fill: cardData.isFoulPlay ? '#FF6B6B' : '#FFD700', wrap: 'word', ellipsis: true,
   }));
 
   if (interactive && onClick) {
+    const glowColor = PRES_GLOW_COLOR[presId] || '#FFD700';
     group.on('mouseover', (e) => {
       document.body.style.cursor = 'pointer';
-      group.to({ scaleX: 1.08, scaleY: 1.08, offsetX: CARD.w * 0.04, offsetY: CARD.h * 0.04, duration: 0.1 });
+      group.to({ scaleX: 1.12, scaleY: 1.12, offsetX: CARD.w * 0.06, offsetY: CARD.h * 0.06,
+        shadowColor: glowColor, shadowBlur: 24, shadowOpacity: 0.7, duration: 0.12 });
       showCardTooltip(cardData, e.evt.clientX, e.evt.clientY);
       L.hands.draw();
     });
     group.on('mousemove', (e) => moveCardTooltip(e.evt.clientX, e.evt.clientY));
     group.on('mouseout', () => {
       document.body.style.cursor = 'default';
-      group.to({ scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, duration: 0.1 });
+      group.to({ scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0,
+        shadowColor: 'black', shadowBlur: 0, shadowOpacity: 0, duration: 0.12 });
       hideCardTooltip();
       L.hands.draw();
     });
     group.on('click', () => onClick(cardData));
   } else if (faceUp) {
-    group.opacity(0.5);
+    group.opacity(0.45);
   }
 
   return group;
@@ -427,8 +459,8 @@ function makeFoulPlaySlot(area, label, isLoaded, isLocked, slotId) {
   g.add(new Konva.Rect({
     x: bx, y: by, width: bw, height: bh, fill: '#080812',
     stroke: isLoaded ? (label === 'MY FOUL PLAY' ? '#9B59B6' : '#C8102E') : '#222',
-    strokeWidth: 2, dash: isLoaded ? [] : [6, 4], cornerRadius: 6,
-    shadowColor: isLoaded ? '#9B59B6' : 'transparent', shadowBlur: isLoaded ? 12 : 0,
+    strokeWidth: isLoaded ? 3 : 2, dash: isLoaded ? [] : [6, 4], cornerRadius: 6,
+    shadowColor: isLoaded ? '#9B59B6' : 'transparent', shadowBlur: isLoaded ? 28 : 0, shadowOpacity: isLoaded ? 0.9 : 0,
   }));
 
   g.add(new Konva.Text({
@@ -442,8 +474,8 @@ function makeFoulPlaySlot(area, label, isLoaded, isLocked, slotId) {
   g.add(new Konva.Text({
     x: bx, y: by + 56, width: bw,
     text: isLocked ? `LOCKED` : (isLoaded ? '✦ LOADED' : 'EMPTY'),
-    fontSize: 9, fontFamily: 'monospace',
-    fill: isLocked ? '#E74C3C' : (isLoaded ? '#9B59B6' : '#333'), align: 'center',
+    fontSize: 9, fontFamily: 'monospace', fontStyle: isLoaded ? 'bold' : 'normal',
+    fill: isLocked ? '#E74C3C' : (isLoaded ? '#C39BD3' : '#333'), align: 'center',
   }));
 
   if (slotId && isLoaded) {
@@ -472,18 +504,28 @@ let _prevAspects = null;
 
 function spawnDeltaFloat(x, y, delta) {
   if (!delta) return;
-  const txt = new Konva.Text({
-    x, y,
-    text: (delta > 0 ? '+' : '') + delta,
-    fontSize: 14, fontFamily: 'monospace', fontStyle: 'bold',
-    fill: delta > 0 ? '#2ECC71' : '#E74C3C',
-    listening: false,
-  });
-  L.anim.add(txt);
+  const isPos = delta > 0;
+  const text   = (isPos ? '+' : '') + delta;
+  const chipW  = text.length * 8 + 14;
+  const chipH  = 22;
+  const chipFill  = isPos ? 'rgba(46,204,113,0.88)' : 'rgba(231,76,60,0.88)';
+  const glowColor = isPos ? '#2ECC71' : '#E74C3C';
+
+  const g = new Konva.Group({ x: x - chipW / 2, y, listening: false });
+  g.add(new Konva.Rect({
+    width: chipW, height: chipH, fill: chipFill, cornerRadius: chipH / 2,
+    shadowColor: glowColor, shadowBlur: 10, shadowOpacity: 0.7,
+  }));
+  g.add(new Konva.Text({
+    width: chipW, height: chipH, text,
+    fontSize: 12, fontFamily: 'monospace', fontStyle: 'bold',
+    fill: '#FFFFFF', align: 'center', verticalAlign: 'middle',
+  }));
+  L.anim.add(g);
   L.anim.draw();
-  txt.to({
-    y: y + (delta > 0 ? -44 : 44), opacity: 0, duration: 1.3,
-    onFinish: () => { txt.destroy(); L.anim.draw(); },
+  g.to({
+    y: y + (isPos ? -52 : 52), opacity: 0, duration: 1.3,
+    onFinish: () => { g.destroy(); L.anim.draw(); },
   });
 }
 
@@ -526,12 +568,17 @@ function buildAspectTable() {
   BAR_MAX_W.p2 = mid - x - 80;
   BAR_MAX_W.p1 = x + LAYOUT.aspects.w - (mid + 80);
 
-  // Column headers
-  L.board.add(new Konva.Text({ x: x + 10, y: y - 18, text: 'P2', fontSize: 11, fontFamily: 'monospace', fill: '#666' }));
-  L.board.add(new Konva.Text({ x: x + LAYOUT.aspects.w - 30, y: y - 18, text: 'P1', fontSize: 11, fontFamily: 'monospace', fill: '#666' }));
+  // Column headers — bold, prominent
+  L.board.add(new Konva.Text({ x: x + 10, y: y - 20, text: 'P2', fontSize: 13, fontFamily: 'monospace', fontStyle: 'bold', fill: '#AAAAAA' }));
+  L.board.add(new Konva.Text({ x: x + LAYOUT.aspects.w - 34, y: y - 20, text: 'P1', fontSize: 13, fontFamily: 'monospace', fontStyle: 'bold', fill: '#AAAAAA' }));
 
   ASPECTS.forEach((asp, i) => {
     const ry = y + i * rowH;
+
+    // Alternating row tint
+    if (i % 2 === 0) {
+      L.board.add(new Konva.Rect({ x, y: ry, width: LAYOUT.aspects.w, height: rowH - 2, fill: 'rgba(255,255,255,0.018)', cornerRadius: 1, listening: false }));
+    }
 
     // Icon
     const aspImg = window.IMG[ASP_ICON[asp]];
@@ -559,12 +606,12 @@ function buildAspectTable() {
     L.board.add(scoreTexts.p1[asp]);
 
     // Bar backgrounds (P2 left grows left→right, P1 right grows left→right)
-    L.board.add(new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2, height: 6, fill: '#111122', cornerRadius: 2 }));
-    L.board.add(new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1, height: 6, fill: '#111122', cornerRadius: 2 }));
+    L.board.add(new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2, height: 10, fill: '#111122', cornerRadius: 3 }));
+    L.board.add(new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1, height: 10, fill: '#111122', cornerRadius: 3 }));
 
     // Bar fills — start at 50%
-    scoreBars.p2[asp] = new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2 * 0.5, height: 6, fill: '#2ECC71', cornerRadius: 2 });
-    scoreBars.p1[asp] = new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1 * 0.5, height: 6, fill: '#2ECC71', cornerRadius: 2 });
+    scoreBars.p2[asp] = new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2 * 0.5, height: 10, fill: '#2ECC71', cornerRadius: 3 });
+    scoreBars.p1[asp] = new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1 * 0.5, height: 10, fill: '#2ECC71', cornerRadius: 3 });
     L.board.add(scoreBars.p2[asp]);
     L.board.add(scoreBars.p1[asp]);
   });
@@ -621,8 +668,9 @@ function updateAspectScores(state) {
     scoreTexts.p2[asp].fill(p2col);
     tweenBar(scoreBars.p1[asp], BAR_MAX_W.p1, p1v);
     tweenBar(scoreBars.p2[asp], BAR_MAX_W.p2, p2v);
-    scoreBars.p1[asp].fill(p1col);
-    scoreBars.p2[asp].fill(p2col);
+    // Bar color based on absolute health, not relative win/loss
+    scoreBars.p1[asp].fill(healthColor(p1v));
+    scoreBars.p2[asp].fill(healthColor(p2v));
   });
 
   if (!_prevAspects) _prevAspects = { p1: {}, p2: {} };
@@ -642,23 +690,25 @@ function buildRoundInfo() {
   const { x, y, w, h } = LAYOUT.roundinfo;
   L.board.add(new Konva.Rect({ x, y, width: w, height: h, fill: '#0D0D1F', stroke: '#1A1A3A', strokeWidth: 1, cornerRadius: 4 }));
 
-  RI.round  = new Konva.Text({ x, y: y + 10, width: w, text: 'ROUND 1 / 7', fontSize: 12, fontFamily: 'monospace', fill: '#FFD700', align: 'center' });
-  RI.turn   = new Konva.Text({ x, y: y + 30, width: w, text: 'TURN 1 / 5', fontSize: 11, fontFamily: 'monospace', fill: '#AAAAAA', align: 'center' });
-  RI.active = new Konva.Text({ x, y: y + 50, width: w, text: '—', fontSize: 11, fontFamily: 'monospace', fill: '#2ECC71', align: 'center' });
+  RI.round  = new Konva.Text({ x, y: y + 8, width: w, text: 'ROUND 1 / 7', fontSize: 16, fontFamily: 'monospace', fontStyle: 'bold', fill: '#FFD700', align: 'center' });
+  RI.turn   = new Konva.Text({ x, y: y + 32, width: w, text: 'TURN 1 / 5', fontSize: 11, fontFamily: 'monospace', fill: '#AAAAAA', align: 'center' });
+  // Pill background behind the active-player indicator
+  RI.activeBg = new Konva.Rect({ x: x + 18, y: y + 47, width: w - 36, height: 20, fill: 'rgba(46,204,113,0.12)', stroke: '#1A5C38', strokeWidth: 1, cornerRadius: 4 });
+  RI.active   = new Konva.Text({ x, y: y + 50, width: w, text: '—', fontSize: 11, fontFamily: 'monospace', fontStyle: 'bold', fill: '#2ECC71', align: 'center' });
 
   RI.pips = [];
-  const pipY = y + 74, pipSpacing = w / 8, pipStartX = x + pipSpacing / 2;
+  const pipY = y + 76, pipSpacing = w / 8, pipStartX = x + pipSpacing / 2;
   for (let i = 0; i < 7; i++) {
     const pip = new Konva.Image({ image: window.IMG['pip_empty'], x: pipStartX + i * pipSpacing - 7, y: pipY, width: 14, height: 14 });
     L.board.add(pip);
     RI.pips.push(pip);
   }
 
-  [RI.round, RI.turn, RI.active].forEach(n => L.board.add(n));
+  [RI.round, RI.turn, RI.activeBg, RI.active].forEach(n => L.board.add(n));
   L.board.draw();
 }
 
-let _sdBorderAnim = null, _sdBorder = null, _sdLabel = null;
+let _sdBorderAnim = null, _sdBorder = null, _sdLabel = null, _sdOverlay = null;
 
 function updateRoundInfo(state, myRole) {
   const isMyTurn = state.activePlayer === myRole;
@@ -667,32 +717,38 @@ function updateRoundInfo(state, myRole) {
   RI.turn.text(`TURN ${state.turn} / 5`);
   RI.active.text(isMyTurn ? 'YOUR TURN' : 'OPPONENT');
   RI.active.fill(isMyTurn ? '#2ECC71' : '#E74C3C');
+  RI.activeBg.fill(isMyTurn ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.12)');
+  RI.activeBg.stroke(isMyTurn ? '#1A5C38' : '#6B1818');
   RI.pips.forEach((pip, i) => {
     const k = i < state.round - 1 ? 'pip_done' : i === state.round - 1 ? 'pip_active' : 'pip_empty';
     if (window.IMG[k]) pip.image(window.IMG[k]);
   });
   L.board.draw();
 
-  // Sudden death pulsing red border + badge
+  // Sudden death: thick pulsing border + dark-red fill overlay + large badge
   if (isSD && !_sdBorder) {
-    _sdBorder = new Konva.Rect({ x: 1, y: 1, width: STAGE_W - 2, height: STAGE_H - 2, stroke: '#E74C3C', strokeWidth: 4, listening: false, cornerRadius: 2 });
-    _sdLabel  = new Konva.Text({
-      x: STAGE_W / 2 - 80, y: LAYOUT.ticker.h + 4, width: 160,
-      text: '⚡ SUDDEN DEATH ⚡', fontSize: 10, fontFamily: 'monospace', fontStyle: 'bold',
+    _sdOverlay = new Konva.Rect({ x: 0, y: 0, width: STAGE_W, height: STAGE_H, fill: 'rgba(192,0,0,0.04)', listening: false });
+    _sdBorder  = new Konva.Rect({ x: 1, y: 1, width: STAGE_W - 2, height: STAGE_H - 2, stroke: '#E74C3C', strokeWidth: 6, listening: false, cornerRadius: 2 });
+    _sdLabel   = new Konva.Text({
+      x: STAGE_W / 2 - 110, y: LAYOUT.ticker.h + 4, width: 220,
+      text: '⚡ SUDDEN DEATH ⚡', fontSize: 13, fontFamily: 'monospace', fontStyle: 'bold',
       fill: '#E74C3C', align: 'center', listening: false,
     });
+    L.effects.add(_sdOverlay);
     L.effects.add(_sdBorder);
     L.effects.add(_sdLabel);
     _sdBorderAnim = new Konva.Animation((frame) => {
       const pulse = 0.35 + 0.65 * Math.abs(Math.sin(frame.time * 0.0025));
       _sdBorder.opacity(pulse);
       _sdLabel.opacity(pulse);
+      _sdOverlay.opacity(pulse * 0.5);
     }, L.effects);
     _sdBorderAnim.start();
   } else if (!isSD && _sdBorder) {
     if (_sdBorderAnim) { _sdBorderAnim.stop(); _sdBorderAnim = null; }
     _sdBorder.destroy(); _sdBorder = null;
-    if (_sdLabel) { _sdLabel.destroy(); _sdLabel = null; }
+    if (_sdLabel)   { _sdLabel.destroy();   _sdLabel   = null; }
+    if (_sdOverlay) { _sdOverlay.destroy(); _sdOverlay = null; }
     L.effects.draw();
   }
 
@@ -737,19 +793,17 @@ function flashNewsAspect(evt) {
 
 // ── Player label panels ────────────────────────────────────────────────────
 
-const playerLabels = { p1: null, p2: null };
+const playerLabels = { p1: null, p2: null, p1strip: null, p2strip: null };
 
 function buildPlayerLabels() {
-  // P2 label (top)
-  playerLabels.p2 = new Konva.Text({
-    x: 0, y: 42, width: 260,
-    text: 'P2', fontSize: 11, fontFamily: 'monospace', fill: '#888', align: 'center',
-  });
-  // P1 label (bottom)
-  playerLabels.p1 = new Konva.Text({
-    x: 0, y: 462, width: 260,
-    text: 'P1', fontSize: 11, fontFamily: 'monospace', fill: '#888', align: 'center',
-  });
+  // President accent color strips
+  playerLabels.p2strip = new Konva.Rect({ x: 0, y: 40, width: 260, height: 3, fill: '#333', listening: false });
+  playerLabels.p1strip = new Konva.Rect({ x: 0, y: 458, width: 260, height: 3, fill: '#333', listening: false });
+  // Labels
+  playerLabels.p2 = new Konva.Text({ x: 0, y: 44, width: 260, text: 'P2', fontSize: 11, fontFamily: 'monospace', fill: '#888', align: 'center' });
+  playerLabels.p1 = new Konva.Text({ x: 0, y: 462, width: 260, text: 'P1', fontSize: 11, fontFamily: 'monospace', fill: '#888', align: 'center' });
+  L.board.add(playerLabels.p2strip);
+  L.board.add(playerLabels.p1strip);
   L.board.add(playerLabels.p1);
   L.board.add(playerLabels.p2);
   L.board.draw();
@@ -759,8 +813,17 @@ function updatePlayerLabels(state, myRole) {
   const presData = window.PRESIDENT_DATA || [];
   const p1Pres = presData.find(p => p.id === state.players.p1.presidentId);
   const p2Pres = presData.find(p => p.id === state.players.p2.presidentId);
-  playerLabels.p1.text(`P1: ${p1Pres ? p1Pres.displayName : 'Player 1'}${myRole === 'p1' ? ' ◀' : ''}`);
-  playerLabels.p2.text(`P2: ${p2Pres ? p2Pres.displayName : 'Player 2'}${myRole === 'p2' ? ' ◀' : ''}`);
+  const p1Color = PRES_GLOW_COLOR[state.players.p1.presidentId] || '#FFD700';
+  const p2Color = PRES_GLOW_COLOR[state.players.p2.presidentId] || '#FFD700';
+  const p1IsMe = myRole === 'p1';
+  const p2IsMe = myRole === 'p2';
+
+  playerLabels.p1strip.fill(p1Color);
+  playerLabels.p2strip.fill(p2Color);
+  playerLabels.p1.text(`P1: ${p1Pres ? p1Pres.displayName : 'Player 1'}${p1IsMe ? ' ◀ YOU' : ''}`);
+  playerLabels.p2.text(`P2: ${p2Pres ? p2Pres.displayName : 'Player 2'}${p2IsMe ? ' ◀ YOU' : ''}`);
+  playerLabels.p1.fill(p1IsMe ? '#FFD700' : '#888');
+  playerLabels.p2.fill(p2IsMe ? '#FFD700' : '#888');
   L.board.draw();
 }
 
@@ -790,7 +853,7 @@ function makeButton(label, x, y, w, h, style, onClick) {
   return g;
 }
 
-let endTurnBtn = null, activateBtn = null;
+let endTurnBtn = null, activateBtn = null, _endTurnAnim = null;
 
 function buildActionButtons() {
   endTurnBtn = makeButton('END TURN', LAYOUT.endturn.x, LAYOUT.endturn.y, LAYOUT.endturn.w, LAYOUT.endturn.h, 'normal', () => window.client.endTurn());
@@ -816,7 +879,19 @@ function buildActionButtons() {
 function updateActionButtons(state, myRole) {
   const isMyTurn = state.activePlayer === myRole;
   endTurnBtn.listening(isMyTurn);
-  endTurnBtn.opacity(isMyTurn ? 1 : 0.4);
+
+  if (isMyTurn && !_endTurnAnim) {
+    // Pulse the end-turn button when it's the player's turn
+    _endTurnAnim = new Konva.Animation((frame) => {
+      endTurnBtn.opacity(0.7 + 0.3 * Math.abs(Math.sin(frame.time * 0.003)));
+    }, L.ui);
+    _endTurnAnim.start();
+  } else if (!isMyTurn && _endTurnAnim) {
+    _endTurnAnim.stop();
+    _endTurnAnim = null;
+    endTurnBtn.opacity(0.4);
+  }
+
   const myPlayer = state.players[myRole];
   const fpLocked = myPlayer?.activeEffects?.some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
   activateBtn.visible(isMyTurn && !!myPlayer?.foulPlaySlot && !fpLocked);
@@ -863,14 +938,16 @@ function renderEffects(state, myRole) {
   const g = new Konva.Group({ id: 'fx-list' });
 
   function renderList(effects, startX, startY, label) {
-    g.add(new Konva.Text({ x: startX, y: startY, text: label, fontSize: 8, fontFamily: 'monospace', fill: '#444' }));
+    g.add(new Konva.Text({ x: startX, y: startY, text: label, fontSize: 8, fontFamily: 'monospace', fill: '#555' }));
     effects.slice(0, 4).forEach((e, i) => {
-      g.add(new Konva.Rect({ x: startX, y: startY + 12 + i * 18, width: 230, height: 14, fill: '#0D0D22', stroke: '#1A1A3A', strokeWidth: 1, cornerRadius: 2 }));
+      const chipFill   = e.delta > 0 ? 'rgba(46,204,113,0.12)' : e.delta < 0 ? 'rgba(231,76,60,0.12)' : 'rgba(41,128,185,0.10)';
+      const chipStroke = e.delta > 0 ? '#1A5C38'               : e.delta < 0 ? '#6B1818'               : '#1A3050';
+      const textFill   = e.delta > 0 ? '#2ECC71'               : e.delta < 0 ? '#E74C3C'               : '#5DADE2';
+      g.add(new Konva.Rect({ x: startX, y: startY + 12 + i * 20, width: 230, height: 16, fill: chipFill, stroke: chipStroke, strokeWidth: 1, cornerRadius: 3 }));
       g.add(new Konva.Text({
-        x: startX + 4, y: startY + 14 + i * 18, width: 222,
+        x: startX + 4, y: startY + 15 + i * 20, width: 222,
         text: `${e.sourceCard || e.type} [${e.durationTurns ?? '∞'}t]`,
-        fontSize: 7, fontFamily: 'monospace',
-        fill: (e.delta > 0) ? '#2ECC71' : '#E74C3C', ellipsis: true,
+        fontSize: 8, fontFamily: 'monospace', fill: textFill, ellipsis: true,
       }));
     });
   }
@@ -912,10 +989,12 @@ function appendLog(msg) {
   if (!logGroup) return; // board not ready yet; entry is buffered in logEntries
   logGroup.destroyChildren();
   logEntries.forEach((entry, i) => {
+    const isLatest = i === logEntries.length - 1;
     logGroup.add(new Konva.Text({
-      x: 0, y: i * 14, width: 740, text: entry,
-      fontSize: 8, fontFamily: 'monospace',
-      fill: i === logEntries.length - 1 ? '#CCCCCC' : '#555',
+      x: 0, y: i * 15, width: 740, text: entry,
+      fontSize: 9, fontFamily: 'monospace',
+      fill: isLatest ? '#FFD700' : '#555',
+      fontStyle: isLatest ? 'bold' : 'normal',
       ellipsis: true,
     }));
   });
@@ -926,10 +1005,12 @@ function _flushLog() {
   if (!logGroup || logEntries.length === 0) return;
   logGroup.destroyChildren();
   logEntries.forEach((entry, i) => {
+    const isLatest = i === logEntries.length - 1;
     logGroup.add(new Konva.Text({
-      x: 0, y: i * 14, width: 740, text: entry,
-      fontSize: 8, fontFamily: 'monospace',
-      fill: i === logEntries.length - 1 ? '#CCCCCC' : '#555',
+      x: 0, y: i * 15, width: 740, text: entry,
+      fontSize: 9, fontFamily: 'monospace',
+      fill: isLatest ? '#FFD700' : '#555',
+      fontStyle: isLatest ? 'bold' : 'normal',
       ellipsis: true,
     }));
   });
