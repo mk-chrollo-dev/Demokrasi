@@ -59,6 +59,8 @@ app.get('/js/cards-browser.js', (req, res) => {
       iconType: getIconType(card),
       effects: (card.effects || []).map(e => ({
         type: e.type,
+        target: e.target || null,
+        targetPlayer: e.targetPlayer || null,
         delta: e.delta ?? null,
         durationTurns: e.durationTurns ?? null,
       })),
