@@ -69,10 +69,12 @@ function getCardData(instanceId) {
   return card ? { ...card, instanceId } : null;
 }
 
+const _VALID_ASPECTS = new Set(['Ekonomi', 'Kesehatan', 'Keamanan', 'Pendidikan', 'Infrastruktur']);
+
 function getEffectLines(cardData) {
   const lines = [];
   for (const e of (cardData.effects || [])) {
-    const asp   = (e.target && e.target !== 'all') ? e.target : 'Semua aspek';
+    const asp   = _VALID_ASPECTS.has(e.target) ? e.target : 'Semua aspek';
     const delta = e.delta ?? 0;
     const dur   = e.durationTurns ?? 0;
     const sign  = delta > 0 ? '+' : '';
@@ -472,46 +474,61 @@ function tweenNum(node, tgt) {
   a.start();
 }
 
+// Layout constants for aspect table rows (ay = LAYOUT.aspects.y, ah = 122)
+// ay+ 3: aspect name  (8px)  → ends ~ay+13
+// ay+15: LAWAN label  (8px)  → ends ~ay+25
+// ay+27: opp score    (22px) → ends ~ay+51
+// ay+53: opp bar      (6px)
+// ay+61: VS divider   (8px)
+// ay+69: my bar       (6px)
+// ay+77: KAMU label   (8px)  → ends ~ay+87
+// ay+90: my score     (22px) → ends ~ay+114  (margin 8px before ay+122)
+const _AT = { name:3, lawan:15, opp:27, oppBar:53, vs:61, myBar:69, kamu:77, mine:90 };
+
 function buildAspectTable() {
   const ay = LAYOUT.aspects.y, ah = LAYOUT.aspects.h;
   L.board.add(new Konva.Rect({ x:0, y:ay, width:STAGE_W, height:ah, fill:'rgba(5,11,24,.55)', listening:false }));
-
-  // Row labels
-  L.board.add(new Konva.Text({ x:0, y:ay+20, width:STAGE_W/2-10, text:'LAWAN', fontSize:10, fontFamily:'monospace', fill:C.muted, align:'right' }));
-  L.board.add(new Konva.Text({ x:STAGE_W/2+10, y:ay+20, width:STAGE_W/2-10, text:'KAMU', fontSize:10, fontFamily:'monospace', fill:C.muted }));
 
   ASPECTS.forEach((asp, i) => {
     const cx = i * COL_W;
     if (i > 0) L.board.add(new Konva.Line({ points:[cx,ay+4,cx,ay+ah-4], stroke:C.border, strokeWidth:1, listening:false }));
 
     // Aspect name + symbol
-    L.board.add(new Konva.Text({ x:cx, y:ay+4, width:COL_W,
+    L.board.add(new Konva.Text({ x:cx, y:ay+_AT.name, width:COL_W,
       text:`${ASP_SYMBOL[asp]}  ${asp.toUpperCase()}`,
-      fontSize:10, fontFamily:'monospace', fill:C.muted, align:'center' }));
+      fontSize:8, fontFamily:'monospace', fill:C.muted, align:'center' }));
+
+    // "LAWAN" row label — clearly above opponent score
+    L.board.add(new Konva.Text({ x:cx, y:ay+_AT.lawan, width:COL_W,
+      text:'▾ LAWAN', fontSize:8, fontFamily:'monospace', fill:'#2A3A54', align:'center' }));
 
     // Opp score
-    scoreTexts.p2[asp] = new Konva.Text({ x:cx+4, y:ay+18, width:COL_W-8, text:'50',
-      fontSize:28, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center' });
+    scoreTexts.p2[asp] = new Konva.Text({ x:cx+4, y:ay+_AT.opp, width:COL_W-8, text:'50',
+      fontSize:22, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center' });
     L.board.add(scoreTexts.p2[asp]);
 
     // Opp bar
     const bx = cx+10, bw = COL_W-20;
-    L.board.add(new Konva.Rect({ x:bx, y:ay+52, width:bw, height:8, fill:'#0A1520', cornerRadius:2 }));
-    scoreBars.p2[asp] = new Konva.Rect({ x:bx, y:ay+52, width:bw*.5, height:8, fill:C.green, cornerRadius:2 });
+    L.board.add(new Konva.Rect({ x:bx, y:ay+_AT.oppBar, width:bw, height:6, fill:'#0A1520', cornerRadius:2 }));
+    scoreBars.p2[asp] = new Konva.Rect({ x:bx, y:ay+_AT.oppBar, width:bw*.5, height:6, fill:C.green, cornerRadius:2 });
     L.board.add(scoreBars.p2[asp]);
 
     // VS divider
-    L.board.add(new Konva.Text({ x:cx, y:ay+62, width:COL_W, text:'─ VS ─',
+    L.board.add(new Konva.Text({ x:cx, y:ay+_AT.vs, width:COL_W, text:'─ VS ─',
       fontSize:8, fontFamily:'monospace', fill:'#1A2A40', align:'center' }));
 
     // My bar
-    L.board.add(new Konva.Rect({ x:bx, y:ay+74, width:bw, height:8, fill:'#0A1520', cornerRadius:2 }));
-    scoreBars.p1[asp] = new Konva.Rect({ x:bx, y:ay+74, width:bw*.5, height:8, fill:C.green, cornerRadius:2 });
+    L.board.add(new Konva.Rect({ x:bx, y:ay+_AT.myBar, width:bw, height:6, fill:'#0A1520', cornerRadius:2 }));
+    scoreBars.p1[asp] = new Konva.Rect({ x:bx, y:ay+_AT.myBar, width:bw*.5, height:6, fill:C.green, cornerRadius:2 });
     L.board.add(scoreBars.p1[asp]);
 
+    // "KAMU" row label — clearly above my score
+    L.board.add(new Konva.Text({ x:cx, y:ay+_AT.kamu, width:COL_W,
+      text:'▴ KAMU', fontSize:8, fontFamily:'monospace', fill:'#2A3A54', align:'center' }));
+
     // My score
-    scoreTexts.p1[asp] = new Konva.Text({ x:cx+4, y:ay+86, width:COL_W-8, text:'50',
-      fontSize:28, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center' });
+    scoreTexts.p1[asp] = new Konva.Text({ x:cx+4, y:ay+_AT.mine, width:COL_W-8, text:'50',
+      fontSize:22, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center' });
     L.board.add(scoreTexts.p1[asp]);
   });
   L.board.draw();
@@ -526,8 +543,8 @@ function updateAspectScores(state) {
     if (_prevAspects) {
       const dp1 = p1v - (_prevAspects.p1[asp] ?? p1v);
       const dp2 = p2v - (_prevAspects.p2[asp] ?? p2v);
-      if (dp1 !== 0) spawnDelta(mx, ay+86, Math.round(dp1));
-      if (dp2 !== 0) spawnDelta(mx, ay+18, Math.round(dp2));
+      if (dp1 !== 0) spawnDelta(mx, ay+_AT.mine, Math.round(dp1));
+      if (dp2 !== 0) spawnDelta(mx, ay+_AT.opp,  Math.round(dp2));
     }
     tweenNum(scoreTexts.p1[asp], p1v);
     tweenNum(scoreTexts.p2[asp], p2v);
@@ -600,7 +617,7 @@ function buildPlayZone() {
   L.play.add(new Konva.Rect({ x:0, y, width:STAGE_W, height:h, fill:'#070E1A', listening:false }));
 
   // Left — opponent last card
-  L.play.add(new Konva.Text({ x:20, y:y+4, text:'KARTU LAWAN', fontSize:9, fontFamily:'monospace', fill:'#2A3A50' }));
+  L.play.add(new Konva.Text({ x:20, y:y+4, text:'KARTU LAWAN', fontSize:9, fontFamily:'monospace', fill:'#3A5472' }));
   PZ.oppCard = new Konva.Group({ x:20, y:y+18 });
   L.play.add(PZ.oppCard);
 
@@ -619,7 +636,7 @@ function buildPlayZone() {
 
   // Right — my last card
   const rx = STAGE_W - MINI.w - 20;
-  L.play.add(new Konva.Text({ x:rx, y:y+4, width:MINI.w, text:'KARTU SAYA', fontSize:9, fontFamily:'monospace', fill:'#2A3A50', align:'right' }));
+  L.play.add(new Konva.Text({ x:rx, y:y+4, width:MINI.w, text:'KARTU SAYA', fontSize:9, fontFamily:'monospace', fill:'#3A5472', align:'right' }));
   PZ.myCard = new Konva.Group({ x:rx, y:y+18 });
   L.play.add(PZ.myCard);
 
@@ -719,7 +736,7 @@ function updateActionBar(state, myRole) {
   const effs = (me.activeEffects || []).filter(e => (e.durationTurns||0) > 0 || e.type === 'amplify' || e.type === 'shield');
   if (effs.length) {
     const parts = effs.slice(0,5).map(e => {
-      const asp = e.target === 'all' ? 'Semua' : e.target;
+      const asp = _VALID_ASPECTS.has(e.target) ? e.target : 'Semua';
       const dur = e.durationTurns > 0 ? ` [${e.durationTurns}×]` : '';
       if (e.type === 'aura')              return `⏱ ${asp} +${e.delta ?? 0}/giliran${dur}`;
       if (e.type === 'amplify')           return `⚡ AKSI berikutnya ×1.5`;
