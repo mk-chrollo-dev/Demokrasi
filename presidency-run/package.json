@@ -1,14 +1,25 @@
 {
   "name": "presidency-run",
   "version": "1.0.0",
-  "description": "1v1 terminal-based political card game",
-  "main": "src/main.js",
+  "description": "1v1 political card game — LAN multiplayer",
+  "main": "electron/main.js",
   "type": "module",
   "scripts": {
-    "start": "node src/main.js",
-    "test": "node src/test-sim.js"
+    "start":       "node server/server.js",
+    "dev":         "node --watch server/server.js",
+    "terminal":    "node src/main.js",
+    "test":        "node src/test-sim.js",
+    "diagnostics": "node src/diagnostics.js",
+    "electron":    "electron ."
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express":   "latest",
+    "socket.io": "latest"
+  },
+  "devDependencies": {
+    "electron": "latest"
   }
 }

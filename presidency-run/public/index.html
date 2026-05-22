@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Presidency Run — Lobby</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div style="padding:2rem 1rem; text-align:center;">
+    <h1>PRESIDENCY RUN</h1>
+    <p style="color:var(--muted); margin:.5rem 0 1.5rem;">Permainan Kartu Politik Indonesia</p>
+  </div>
+
+  <!-- PANEL A: Choose role -->
+  <div id="panel-role" class="panel">
+    <button class="btn btn-gold" id="btn-host" style="width:100%; font-size:1.1rem; padding:.9rem;">
+      Host Game
+    </button>
+
+    <div class="divider">atau</div>
+
+    <div class="flex-row">
+      <input type="text" id="input-code" placeholder="Kode room (6 huruf)" maxlength="6"
+             style="text-transform:uppercase; letter-spacing:.15em;" />
+      <button class="btn btn-primary" id="btn-join">JOIN</button>
+    </div>
+
+    <div id="notice-role" class="mt2"></div>
+  </div>
+
+  <!-- PANEL B: Waiting for P2 (host view) -->
+  <div id="panel-waiting" class="panel hidden">
+    <h2>Room dibuat!</h2>
+    <p style="color:var(--muted); margin:.5rem 0;">Kode room:</p>
+    <div class="room-code" id="display-code">------</div>
+    <p style="color:var(--muted); font-size:.85rem; margin:.5rem 0;">Beri tahu Player 2 untuk membuka browser dan masuk ke:</p>
+    <div class="ip-block" id="display-ip">http://...</div>
+    <div class="mt2" style="color:var(--muted); font-size:.9rem;">
+      Menunggu Player 2... <span class="dot"></span>
+    </div>
+    <button class="btn btn-ghost mt2" id="btn-reset-waiting" style="width:100%;">Batalkan</button>
+  </div>
+
+  <!-- PANEL C: President selection -->
+  <div id="panel-select" class="panel hidden" style="max-width:760px;">
+    <h2 id="select-title">Pilih Presidenmu</h2>
+    <p id="select-sub" style="color:var(--muted); margin:.5rem 0 1rem;">Klik kartu presiden untuk memilih</p>
+
+    <div class="president-grid" id="pres-grid">
+      <!-- Populated by lobby.js -->
+    </div>
+
+    <div id="notice-select" class="mt2"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/js/lobby.js"></script>
+</body>
+</html>
