@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0A0A1A;
+      color: #FFD700;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 0;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    h1 { font-size: 15px; letter-spacing: 3px; margin-bottom: 4px; }
+    .sub { font-size: 9px; color: #333; letter-spacing: 2px; margin-bottom: 24px; }
+
+    .btn {
+      -webkit-app-region: no-drag;
+      width: 220px; padding: 10px 0;
+      background: #0D0D1F; border: 1px solid #FFD700;
+      color: #FFD700; font-family: monospace; font-size: 11px;
+      letter-spacing: 1px; cursor: pointer; margin-bottom: 8px;
+      transition: background .1s;
+    }
+    .btn:hover { background: #1A1A3A; }
+    .btn.red { border-color: #555; color: #555; font-size: 9px; }
+    .btn.red:hover { background: #111; color: #888; border-color: #888; }
+
+    #join-panel { display: none; flex-direction: column; align-items: center; }
+    input {
+      -webkit-app-region: no-drag;
+      width: 220px; padding: 9px 0; margin-bottom: 8px;
+      background: #0D0D1F; border: 1px solid #333;
+      color: #FFF; font-family: monospace; font-size: 14px;
+      letter-spacing: 1px; text-align: center;
+    }
+    input:focus { outline: none; border-color: #FFD700; }
+    input::placeholder { color: #333; font-size: 11px; }
+    #err { color: #E74C3C; font-size: 9px; margin-top: 2px; min-height: 12px; }
+  </style>
+</head>
+<body>
+  <h1>DEMOCRACY THE GAME</h1>
+  <div class="sub">PERMAINAN KARTU POLITIK</div>
+
+  <div id="main-panel">
+    <button class="btn" onclick="hostGame()">▶  HOST GAME  (P1)</button>
+    <button class="btn" onclick="showJoin()">⇒  JOIN GAME  (P2)</button>
+  </div>
+
+  <div id="join-panel">
+    <input id="ip" type="text" placeholder="IP host  (192.168.x.x)" maxlength="21" spellcheck="false" />
+    <button class="btn" onclick="doJoin()">CONNECT</button>
+    <button class="btn red" onclick="showMain()">← back</button>
+    <div id="err"></div>
+  </div>
+
+  <script>
+    function hostGame() { window.electronAPI.hostGame(); }
+
+    function showJoin() {
+      document.getElementById('main-panel').style.display = 'none';
+      document.getElementById('join-panel').style.display = 'flex';
+      document.getElementById('ip').focus();
+    }
+    function showMain() {
+      document.getElementById('join-panel').style.display = 'none';
+      document.getElementById('main-panel').style.display = 'flex';
+      document.getElementById('err').textContent = '';
+    }
+    function doJoin() {
+      const raw = document.getElementById('ip').value.trim();
+      if (!raw) { document.getElementById('err').textContent = 'Enter the host IP address'; return; }
+      const [ip, portStr] = raw.split(':');
+      const port = portStr ? parseInt(portStr, 10) : 3000;
+      if (!ip) { document.getElementById('err').textContent = 'Invalid address'; return; }
+      document.getElementById('err').textContent = 'Connecting...';
+      window.electronAPI.joinGame(ip.trim(), port);
+    }
+    document.getElementById('ip').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doJoin();
+    });
+  </script>
+</body>
+</html>

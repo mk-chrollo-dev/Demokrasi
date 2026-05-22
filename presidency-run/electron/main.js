@@ -1,79 +1,89 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { join, dirname } from 'path';
 import { startServer } from '../server/server.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let win = null;
-let serverPort = null;
+let launcherWin = null;
+let gameWin = null;
 
 // Single-instance guard
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }
-
 app.on('second-instance', () => {
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.focus();
-  }
+  const w = gameWin || launcherWin;
+  if (w) { if (w.isMinimized()) w.restore(); w.focus(); }
 });
 
-app.whenReady().then(async () => {
-  let port = 3000;
-  let localIP = '127.0.0.1';
+function openGameWindow(url, title) {
+  Menu.setApplicationMenu(null);
+  gameWin = new BrowserWindow({
+    width: 1300, height: 780,
+    minWidth: 800, minHeight: 500,
+    title,
+    backgroundColor: '#0A0A1A',
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    autoHideMenuBar: true,
+  });
+  gameWin.loadURL(url);
+  gameWin.on('closed', () => { gameWin = null; });
+}
 
-  try {
-    ({ port, localIP } = await startServer(port));
-  } catch (err) {
-    // Port likely in use — try one more time on next port
-    try {
-      ({ port, localIP } = await startServer(port + 1));
-    } catch (err2) {
-      console.error('[Electron] Could not start server:', err2.message);
-      app.quit();
-      return;
-    }
-  }
-
-  serverPort = port;
+app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
-  win = new BrowserWindow({
-    width: 1300,
-    height: 780,
-    minWidth: 800,
-    minHeight: 500,
-    title: `Democracy The Game  ·  P2 joins: ${localIP}:${port}`,
+  // ── Launcher window ──────────────────────────────────────────────────────
+  launcherWin = new BrowserWindow({
+    width: 340, height: 260,
+    resizable: false,
+    title: 'Democracy The Game',
     backgroundColor: '#0A0A1A',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: join(__dirname, 'preload.cjs'),
     },
     autoHideMenuBar: true,
   });
+  launcherWin.loadFile(join(__dirname, 'launcher.html'));
+  launcherWin.on('closed', () => {
+    launcherWin = null;
+    if (!gameWin) app.quit();
+  });
 
-  win.loadURL(`http://localhost:${port}`);
-  win.on('closed', () => { win = null; });
+  // ── Handle launcher choice ───────────────────────────────────────────────
+  ipcMain.once('launcher-choice', async (_event, { mode, ip, port }) => {
+    if (mode === 'host') {
+      let serverPort = 3000;
+      let localIP = '127.0.0.1';
+      try {
+        ({ port: serverPort, localIP } = await startServer(3000));
+      } catch {
+        try {
+          ({ port: serverPort, localIP } = await startServer(3001));
+        } catch (err) {
+          console.error('[Electron] Server failed to start:', err.message);
+          app.quit();
+          return;
+        }
+      }
+      launcherWin?.close();
+      openGameWindow(
+        `http://localhost:${serverPort}`,
+        `Democracy The Game  ·  P2 joins: ${localIP}:${serverPort}`,
+      );
+    } else {
+      // Join mode — open straight to host's server, no local server started
+      launcherWin?.close();
+      openGameWindow(
+        `http://${ip}:${port}`,
+        `Democracy The Game  ·  Connected to ${ip}:${port}`,
+      );
+    }
+  });
 });
 
-app.on('window-all-closed', () => {
-  app.quit();
-});
-
-app.on('activate', () => {
-  if (!win && serverPort) {
-    win = new BrowserWindow({
-      width: 1300, height: 780,
-      title: 'Democracy The Game',
-      backgroundColor: '#0A0A1A',
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
-      autoHideMenuBar: true,
-    });
-    Menu.setApplicationMenu(null);
-    win.loadURL(`http://localhost:${serverPort}`);
-    win.on('closed', () => { win = null; });
-  }
-});
+app.on('window-all-closed', () => app.quit());
