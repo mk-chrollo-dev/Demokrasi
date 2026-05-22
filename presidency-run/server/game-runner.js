@@ -185,6 +185,8 @@ export function runAction(state, action, playerRole) {
 
     const newState = dehydrateGame(game, { newsLog, actionLog });
     newState.cardPlayedThisTurn = true;
+    newState.lastP1Card = playerRole === 'p1' ? cardId : (state.lastP1Card || null);
+    newState.lastP2Card = playerRole === 'p2' ? cardId : (state.lastP2Card || null);
 
     return { newState, logEntry: actionLog[actionLog.length - 1], isGameOver: false, winner: null, peekCards };
   }
@@ -233,6 +235,8 @@ export function runAction(state, action, playerRole) {
 
     const newState = dehydrateGame(game, { newsLog, actionLog });
     newState.cardPlayedThisTurn = true;
+    newState.lastP1Card = state.lastP1Card || null;
+    newState.lastP2Card = state.lastP2Card || null;
 
     return { newState, logEntry: logMsg, isGameOver: false, winner: null };
   }
@@ -305,6 +309,8 @@ export function runAction(state, action, playerRole) {
 
     const newState = dehydrateGame(game, { newsLog, actionLog, lastNewsEvent });
     newState.cardPlayedThisTurn = false;
+    newState.lastP1Card = state.lastP1Card || null;
+    newState.lastP2Card = state.lastP2Card || null;
 
     return { newState, logEntry: actionLog[actionLog.length - 1], isGameOver: false, winner: null };
   }

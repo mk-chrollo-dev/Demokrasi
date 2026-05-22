@@ -1,21 +1,12 @@
-// Konva.js game UI for Democracy The Game.
-// Replaces game-ui.js. Loaded as a regular <script> in game.html.
-// Depends on: window.client (client.js), window.Konva (CDN),
-//             window.CARD_REGISTRY (/js/cards-browser.js),
-//             window.HEADLINES (/js/news-headlines.js)
+// Konva.js game UI — Democracy The Game v2
+// Full-width row layout, procedural card art, human-readable effects.
 
-// ── Stage ─────────────────────────────────────────────────────────────────
-
+// ── Stage ──────────────────────────────────────────────────────────────────────
 const STAGE_W = 1280;
 const STAGE_H = 720;
 
-const stage = new Konva.Stage({
-  container: 'konva-container',
-  width: STAGE_W,
-  height: STAGE_H,
-});
+const stage = new Konva.Stage({ container: 'konva-container', width: STAGE_W, height: STAGE_H });
 
-// Viewport scaling for screens narrower than 1280px
 function applyViewportScale() {
   const container = document.getElementById('konva-container');
   if (!container) return;
@@ -27,19 +18,11 @@ function applyViewportScale() {
     stage.scale({ x: s, y: s });
     stage.draw();
   } else if (stage.scaleX() !== 1) {
-    stage.width(STAGE_W);
-    stage.height(STAGE_H);
-    stage.scale({ x: 1, y: 1 });
-    stage.draw();
+    stage.width(STAGE_W); stage.height(STAGE_H);
+    stage.scale({ x: 1, y: 1 }); stage.draw();
   }
 }
 window.addEventListener('resize', applyViewportScale);
-
-function disableSmoothing(layer) {
-  const c = layer.getCanvas()._canvas;
-  const ctx = c.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-}
 
 const L = {
   bg:      new Konva.Layer(),
@@ -50,1213 +33,987 @@ const L = {
   ui:      new Konva.Layer(),
   anim:    new Konva.Layer(),
 };
-Object.values(L).forEach(l => { stage.add(l); disableSmoothing(l); });
+Object.values(L).forEach(l => stage.add(l));
 
-// ── Layout ────────────────────────────────────────────────────────────────
-
+// ── Layout — full-width rows, total = 720px ────────────────────────────────────
 const LAYOUT = {
-  ticker:    { x: 0,    y: 0,   w: 1280, h: 36 },
-  p2hand:    { x: 0,    y: 40,  w: 260,  h: 210 },
-  p2fp:      { x: 1080, y: 40,  w: 196,  h: 210 },
-  aspects:   { x: 280,  y: 50,  w: 720,  h: 265 },
-  center:    { x: 260,  y: 36,  w: 760,  h: 648 },
-  playarea:  { x: 0,    y: 260, w: 260,  h: 186 },
-  roundinfo: { x: 1082, y: 260, w: 194,  h: 150 },
-  p1fp:      { x: 1082, y: 416, w: 194,  h: 200 },
-  p1hand:    { x: 0,    y: 460, w: 260,  h: 256 },
-  endturn:   { x: 1090, y: 600, w: 180,  h: 40  },
-  activate:  { x: 1090, y: 546, w: 180,  h: 46  },
+  ticker:    { x: 0, y: 0,   w: 1280, h: 28  },
+  oppBar:    { x: 0, y: 28,  w: 1280, h: 46  },
+  oppHand:   { x: 0, y: 74,  w: 1280, h: 162 },
+  aspects:   { x: 0, y: 236, w: 1280, h: 122 },
+  playZone:  { x: 0, y: 358, w: 1280, h: 122 },
+  myHand:    { x: 0, y: 480, w: 1280, h: 178 },
+  actionBar: { x: 0, y: 658, w: 1280, h: 62  },
 };
 
-const CARD = { w: 96, h: 134 };
-const CARD_GAP = 24;
+const CARD = { w: 110, h: 152 };
+const MINI  = { w: 82,  h: 112 };
 
-// Per-president glow colors for card hover
-const PRES_GLOW_COLOR = { soekarno: '#C0392B', soeharto: '#6D8B2A', megawati: '#C0396A', prabowo: '#4A7090', jokowi: '#1A6FD4' };
+// ── Colour palette ─────────────────────────────────────────────────────────────
+const PRES_COLOR = { soekarno:'#C0392B', soeharto:'#6D8B2A', megawati:'#C0396A', prabowo:'#4A7090', jokowi:'#1A6FD4' };
+const PRES_BG    = { soekarno:'#180306', soeharto:'#0A1202', megawati:'#180310', prabowo:'#06090F', jokowi:'#030A18' };
 
-function healthColor(val) {
-  if (val <= 20) return '#E74C3C';
-  if (val <= 35) return '#E67E22';
-  return '#2ECC71';
-}
-
-// ── Assets ────────────────────────────────────────────────────────────────
-
-const ASSETS = {
-  pres_soekarno:  '/assets/presidents/soekarno.png',
-  pres_soeharto:  '/assets/presidents/soeharto.png',
-  pres_megawati:  '/assets/presidents/megawati.png',
-  pres_prabowo:   '/assets/presidents/prabowo.png',
-  pres_jokowi:    '/assets/presidents/jokowi.png',
-  frame_soekarno: '/assets/frames/frame_soekarno.png',
-  frame_soeharto: '/assets/frames/frame_soeharto.png',
-  frame_megawati: '/assets/frames/frame_megawati.png',
-  frame_prabowo:  '/assets/frames/frame_prabowo.png',
-  frame_jokowi:   '/assets/frames/frame_jokowi.png',
-  card_back:      '/assets/card-back.png',
-  bg_tile:        '/assets/bg-tile.png',
-  fp_slot:        '/assets/fp-slot.png',
-  icon_speech:    '/assets/icons/icon_speech.png',
-  icon_money:     '/assets/icons/icon_money.png',
-  icon_road:      '/assets/icons/icon_road.png',
-  icon_crowd:     '/assets/icons/icon_crowd.png',
-  icon_newspaper: '/assets/icons/icon_newspaper.png',
-  icon_handshake: '/assets/icons/icon_handshake.png',
-  icon_building:  '/assets/icons/icon_building.png',
-  icon_star:      '/assets/icons/icon_star.png',
-  icon_shield:    '/assets/icons/icon_shield.png',
-  icon_lightning: '/assets/icons/icon_lightning.png',
-  icon_sword:     '/assets/icons/icon_sword.png',
-  icon_heart:     '/assets/icons/icon_heart.png',
-  icon_book:      '/assets/icons/icon_book.png',
-  icon_gear:      '/assets/icons/icon_gear.png',
-  icon_chart:     '/assets/icons/icon_chart.png',
-  icon_skull:     '/assets/icons/icon_skull.png',
-  icon_envelope:  '/assets/icons/icon_envelope.png',
-  icon_flag:      '/assets/icons/icon_flag.png',
-  icon_clock:     '/assets/icons/icon_clock.png',
-  icon_broom:     '/assets/icons/icon_broom.png',
-  asp_ekonomi:    '/assets/aspects/ekonomi.png',
-  asp_kesehatan:  '/assets/aspects/kesehatan.png',
-  asp_keamanan:   '/assets/aspects/keamanan.png',
-  asp_pendidikan: '/assets/aspects/pendidikan.png',
-  asp_infra:      '/assets/aspects/infra.png',
-  btn_normal:     '/assets/ui/btn-normal.png',
-  btn_hover:      '/assets/ui/btn-hover.png',
-  btn_danger:     '/assets/ui/btn-danger.png',
-  pip_active:     '/assets/ui/pip-active.png',
-  pip_empty:      '/assets/ui/pip-empty.png',
-  pip_done:       '/assets/ui/pip-done.png',
+const C = {
+  gold:'#D4AC0D', gold2:'#F0C930', green:'#2ECC71', red:'#E74C3C', orange:'#E67E22',
+  blue:'#5DADE2', muted:'#4A5E7A', text:'#DCE6F0', bg:'#050B18', surface:'#0C1220', border:'#1A2A40',
 };
 
-window.IMG = {};
+function healthColor(v) { return v <= 20 ? C.red : v <= 35 ? C.orange : C.green; }
+function getPresColor(id) { return PRES_COLOR[id] || C.gold; }
+function getPresBg(id)    { return PRES_BG[id]    || '#0A0A1A'; }
 
-function preloadAll(onProgress, onComplete) {
-  const keys = Object.keys(ASSETS);
-  let loaded = 0;
-  let failed = 0;
-  for (const key of keys) {
-    Konva.Image.fromURL(ASSETS[key], (node) => {
-      window.IMG[key] = node.image();
-      loaded++;
-      onProgress((loaded + failed) / keys.length);
-      if (loaded + failed === keys.length) onComplete();
-    }, () => {
-      // silently continue if asset missing
-      failed++;
-      onProgress((loaded + failed) / keys.length);
-      if (loaded + failed === keys.length) onComplete();
-    });
-  }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
+// ── Data helpers ───────────────────────────────────────────────────────────────
 function getCardData(instanceId) {
   const baseId = instanceId.replace(/_\d+$/, '');
-  const card = (window.CARD_REGISTRY || {})[baseId];
-  if (!card) return null;
-  return { ...card, instanceId };
+  const card   = (window.CARD_REGISTRY || {})[baseId];
+  return card ? { ...card, instanceId } : null;
 }
 
-function getIconImg(iconType) {
-  const key = 'icon_' + (iconType || 'star');
-  return window.IMG[key] || window.IMG['icon_star'];
-}
-
-function getRiskPercent() {
-  const state = window._gameState;
-  const myRole = window.client?.playerRole;
-  if (!state || !myRole) return 0;
-  const uses = state.players[myRole]?.foulPlayUses || 0;
-  const table = [5, 15, 30, 50, 75];
-  return table[Math.min(uses, 4)];
-}
-
-// ── Background ────────────────────────────────────────────────────────────
-
-function drawBackground() {
-  const img = window.IMG['bg_tile'];
-  if (!img) {
-    L.bg.add(new Konva.Rect({ x: 0, y: 0, width: STAGE_W, height: STAGE_H, fill: '#0A0A1A' }));
-  } else {
-    const pat = document.createElement('canvas');
-    pat.width = img.width; pat.height = img.height;
-    const pctx = pat.getContext('2d');
-    pctx.imageSmoothingEnabled = false;
-    pctx.drawImage(img, 0, 0);
-    L.bg.add(new Konva.Rect({
-      x: 0, y: 0, width: STAGE_W, height: STAGE_H,
-      fillPatternImage: pat,
-      fillPatternRepeat: 'repeat',
-      fillPatternScale: { x: 4, y: 4 },
-    }));
+function getEffectLines(cardData) {
+  const lines = [];
+  for (const e of (cardData.effects || [])) {
+    const asp  = e.target === 'all' ? 'Semua aspek' : e.target;
+    const sign = (e.delta || 0) > 0 ? '+' : '';
+    switch (e.type) {
+      case 'growth':  lines.push(`${asp} ${sign}${e.delta}`); break;
+      case 'decay':   lines.push(`Lawan: ${asp} ${e.delta}`); break;
+      case 'aura':    lines.push(`${asp} ${sign}${e.delta} selama ${e.durationTurns} giliran`); break;
+      case 'cleanse': lines.push('Bersihkan efek negatif'); break;
+      case 'draw':    lines.push(`Tarik ${e.delta} kartu`); break;
+      case 'skip':    lines.push('Lawan: lewati giliran'); break;
+      case 'amplify': lines.push('Kartu AKSI berikutnya ×1.5'); break;
+      case 'shield':  lines.push(`Blokir efek negatif (${e.durationTurns} giliran)`); break;
+      case 'multi_steal':          lines.push('Curi aspek dari lawan'); break;
+      case 'swap_aspects':         lines.push('Tukar semua aspek dengan lawan'); break;
+      case 'hostile_cleanse':      lines.push('Hapus efek positif lawan'); break;
+      case 'force_discard_hand':   lines.push('Lawan: buang semua kartu di tangan'); break;
+      case 'lock_foulplay_slot':   lines.push('Lawan: slot Foul Play terkunci'); break;
+      case 'block_active_play':    lines.push(`Lawan: tidak bisa AKSI (${e.durationTurns} giliran)`); break;
+      case 'block_passive_play':   lines.push(`Lawan: tidak bisa PASIF (${e.durationTurns} giliran)`); break;
+      case 'block_draw':           lines.push('Lawan: tidak bisa tarik kartu'); break;
+      case 'peek_deck':            lines.push('Lihat 2 kartu teratas deck lawan'); break;
+      case 'nullify_next_passive': lines.push('Batalkan PASIF lawan berikutnya'); break;
+      case 'copy_own_effect':      lines.push('Gandakan efek aktif sendiri'); break;
+      case 'reveal_hand_permanent':lines.push('Lihat seluruh tangan lawan'); break;
+      default: break;
+    }
   }
-  // Radial vignette overlay — darkens edges to focus attention on board center
-  L.bg.add(new Konva.Rect({
-    x: 0, y: 0, width: STAGE_W, height: STAGE_H,
-    fillRadialGradientStartPoint:  { x: STAGE_W / 2, y: STAGE_H / 2 },
-    fillRadialGradientStartRadius: 0,
-    fillRadialGradientEndPoint:    { x: STAGE_W / 2, y: STAGE_H / 2 },
-    fillRadialGradientEndRadius:   Math.max(STAGE_W, STAGE_H) * 0.75,
-    fillRadialGradientColorStops:  [0, 'rgba(0,0,0,0)', 0.55, 'rgba(0,0,0,0)', 1, 'rgba(0,0,10,0.70)'],
-    listening: false,
-  }));
-  L.bg.draw();
+  return lines;
 }
 
-// ── Card tooltip (DOM overlay, outside Konva) ─────────────────────────────
+const ICON_SYMBOL = {
+  speech:'◉', road:'⊟', money:'◈', crowd:'◎', newspaper:'▣', handshake:'⊕',
+  building:'⊞', shield:'◯', sword:'◆', heart:'♦', book:'▤', gear:'⊛',
+  chart:'▲', skull:'☠', envelope:'▽', broom:'◇', lightning:'▸', star:'★', clock:'◷', flag:'⚑',
+};
+function getCardSymbol(cd) { return cd.isFoulPlay ? '☠' : (ICON_SYMBOL[cd.iconType] || '★'); }
 
+// ── Toast notifications (DOM) ──────────────────────────────────────────────────
+function showToast(msg, type = 'error') {
+  const prev = document.getElementById('game-toast');
+  if (prev) prev.remove();
+  const el = document.createElement('div');
+  el.id = 'game-toast';
+  const col = type === 'success' ? { bg:'rgba(30,132,73,.95)', bd:'#2ECC71' }
+            : type === 'info'    ? { bg:'rgba(26,111,212,.95)', bd:'#5DADE2' }
+                                 : { bg:'rgba(192,57,43,.95)',  bd:'#E74C3C' };
+  Object.assign(el.style, {
+    position:'fixed', top:'70px', left:'50%', transform:'translateX(-50%)',
+    background:col.bg, border:`2px solid ${col.bd}`, color:'#fff',
+    padding:'11px 28px', borderRadius:'3px', fontFamily:'monospace',
+    fontSize:'14px', fontWeight:'bold', letterSpacing:'.08em',
+    zIndex:'9999', pointerEvents:'none', boxShadow:'0 4px 24px rgba(0,0,0,.7)',
+    opacity:'1', transition:'opacity .4s', textAlign:'center', maxWidth:'580px',
+    textTransform:'uppercase',
+  });
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 2800);
+}
+
+// ── Card tooltip (DOM overlay) ─────────────────────────────────────────────────
 let _tooltipEl = null;
-
 function _ensureTooltip() {
   if (_tooltipEl) return _tooltipEl;
   _tooltipEl = document.createElement('div');
   Object.assign(_tooltipEl.style, {
-    position: 'fixed', zIndex: '9999', pointerEvents: 'none',
-    background: '#0A0A1A', border: '1px solid #FFD700', borderRadius: '6px',
-    padding: '10px 12px', maxWidth: '220px', fontFamily: 'monospace',
-    fontSize: '11px', color: '#CCC', lineHeight: '1.5',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.8)', display: 'none',
+    position:'fixed', zIndex:'9999', pointerEvents:'none',
+    background:'#08101C', border:'1px solid #1A6FD4', borderRadius:'4px',
+    padding:'12px 14px', maxWidth:'250px', fontFamily:'monospace',
+    fontSize:'12px', color:C.text, lineHeight:'1.6',
+    boxShadow:'0 4px 24px rgba(0,0,0,.85)', display:'none',
   });
   document.body.appendChild(_tooltipEl);
   return _tooltipEl;
 }
-
-function _effectChip(e) {
-  const LABELS = {
-    growth: '▲', decay: '▼', aura: '✦ aura', shield: '🛡', amplify: '⚡ amplify',
-    skip: '⏭ skip', draw: '🃏 draw', cleanse: '🧹 cleanse',
-    nullify_next_passive: '✗ nullify passive', nullify_effect_stack: '✗ clear effects',
-    block_draw: '🚫 draw', block_active_play: '🚫 active', block_passive_play: '🚫 passive',
-    multi_steal: '↔ steal', swap_aspects: '⇅ swap', hostile_cleanse: '✗ opp cleanse',
-    force_discard_hand: '🗑 discard hand', lock_foulplay_slot: '🔒 FP slot',
-    peek_deck: '👁 peek', copy_own_effect: '⧉ copy effect',
-    reveal_hand_permanent: '👁 reveal hand',
-  };
-  const label = LABELS[e.type] || e.type;
-  let text = label;
-  if (e.delta !== null && e.delta !== 0) text += ` ${e.delta > 0 ? '+' : ''}${e.delta}`;
-  if (e.durationTurns !== null && e.durationTurns > 0) text += ` [${e.durationTurns}t]`;
-  const col = e.delta > 0 ? '#2ECC71' : e.delta < 0 ? '#E74C3C' : '#AAAAAA';
-  return `<span style="display:inline-block;background:#111;border:1px solid #333;border-radius:3px;padding:1px 5px;margin:2px 2px 0 0;color:${col};font-size:10px">${text}</span>`;
-}
-
-function showCardTooltip(cardData, mx, my) {
+function showCardTooltip(cd, mx, my) {
   const el = _ensureTooltip();
-  const typeColor = cardData.isFoulPlay ? '#FF6B6B' : cardData.type === 'active' ? '#E74C3C' : '#5DADE2';
-  const typeLabel = cardData.isFoulPlay ? 'FOUL PLAY' : cardData.type === 'active' ? 'ACTIVE' : 'PASSIVE';
-  const chips = (cardData.effects || []).map(_effectChip).join('');
-  const desc = (cardData.description || '').replace(/;(\s*)/g, '<br>• ');
+  const typeColor = cd.isFoulPlay ? C.red : cd.type === 'active' ? C.blue : C.green;
+  const typeLabel = cd.isFoulPlay ? '☠ FOUL PLAY — Berisiko tinggi!' : cd.type === 'active' ? '⚡ AKSI — Berlaku langsung' : '⏱ PASIF — Efek berlanjut';
+  const lines = getEffectLines(cd);
   el.innerHTML =
-    `<div style="color:#FFD700;font-weight:bold;margin-bottom:4px;font-size:12px">${cardData.name || ''}</div>` +
-    `<div style="color:${typeColor};font-size:9px;margin-bottom:6px;letter-spacing:1px">${typeLabel}</div>` +
-    (chips ? `<div style="margin-bottom:8px">${chips}</div>` : '') +
-    `<div style="color:#999;font-size:10px;border-top:1px solid #1A1A2E;padding-top:6px">${desc || '—'}</div>`;
+    `<div style="color:${C.gold};font-weight:bold;font-size:13px;margin-bottom:5px">${cd.name || ''}</div>` +
+    `<div style="color:${typeColor};font-size:10px;margin-bottom:8px;letter-spacing:.08em">${typeLabel}</div>` +
+    (lines.length ? `<div style="border-top:1px solid #1A2A40;padding-top:8px">${lines.map(l =>
+      `<div style="color:${l.startsWith('Lawan') ? C.red : C.green};margin-bottom:2px">${l}</div>`
+    ).join('')}</div>` : '') +
+    (cd.description ? `<div style="color:#506070;font-size:10px;margin-top:8px;border-top:1px solid #111;padding-top:6px">${cd.description}</div>` : '');
   el.style.display = 'block';
-  moveCardTooltip(mx, my);
+  _moveTooltip(mx, my);
 }
-
-function moveCardTooltip(mx, my) {
+function _moveTooltip(mx, my) {
   if (!_tooltipEl || _tooltipEl.style.display === 'none') return;
-  const pad = 14;
-  const tw = _tooltipEl.offsetWidth, th = _tooltipEl.offsetHeight;
-  let lx = mx + pad, ly = my + pad;
+  const pad = 14, tw = _tooltipEl.offsetWidth, th = _tooltipEl.offsetHeight;
+  let lx = mx + pad, ly = my - th / 2;
   if (lx + tw > window.innerWidth)  lx = mx - tw - pad;
-  if (ly + th > window.innerHeight) ly = my - th - pad;
-  _tooltipEl.style.left = lx + 'px';
-  _tooltipEl.style.top  = ly + 'px';
+  if (ly < 4) ly = 4;
+  if (ly + th > window.innerHeight) ly = window.innerHeight - th - 4;
+  _tooltipEl.style.left = lx + 'px'; _tooltipEl.style.top = ly + 'px';
+}
+function hideCardTooltip() { if (_tooltipEl) _tooltipEl.style.display = 'none'; }
+
+// ── Background ─────────────────────────────────────────────────────────────────
+function drawBackground() {
+  L.bg.add(new Konva.Rect({ x:0, y:0, width:STAGE_W, height:STAGE_H, fill:'#050B18' }));
+  for (let x = 0; x < STAGE_W; x += 40)
+    L.bg.add(new Konva.Line({ points:[x,0,x,STAGE_H], stroke:'rgba(26,42,64,.25)', strokeWidth:1, listening:false }));
+  for (let y = 0; y < STAGE_H; y += 40)
+    L.bg.add(new Konva.Line({ points:[0,y,STAGE_W,y], stroke:'rgba(26,42,64,.25)', strokeWidth:1, listening:false }));
+  // Section dividers
+  [LAYOUT.oppHand.y, LAYOUT.aspects.y, LAYOUT.playZone.y, LAYOUT.myHand.y, LAYOUT.actionBar.y].forEach(dy => {
+    L.bg.add(new Konva.Line({ points:[0,dy,STAGE_W,dy], stroke:'#1A2A40', strokeWidth:1, listening:false }));
+  });
+  // Vignette
+  L.bg.add(new Konva.Rect({
+    x:0, y:0, width:STAGE_W, height:STAGE_H, listening:false,
+    fillRadialGradientStartPoint:{x:STAGE_W/2,y:STAGE_H/2}, fillRadialGradientStartRadius:0,
+    fillRadialGradientEndPoint:{x:STAGE_W/2,y:STAGE_H/2}, fillRadialGradientEndRadius:STAGE_W*.72,
+    fillRadialGradientColorStops:[0,'rgba(0,0,0,0)',.5,'rgba(0,0,0,0)',1,'rgba(0,0,10,.5)'],
+  }));
+  L.bg.draw();
 }
 
-function hideCardTooltip() {
-  if (_tooltipEl) _tooltipEl.style.display = 'none';
-}
-
-// ── Card component ─────────────────────────────────────────────────────────
-
-function makeCard(cardData, faceUp = true, interactive = false, onClick = null) {
-  const group = new Konva.Group({ width: CARD.w, height: CARD.h, listening: faceUp && interactive });
+// ── Card component ──────────────────────────────────────────────────────────────
+function makeCard(cardData, faceUp = true, interactive = false, onClick = null, dimmed = false) {
+  const g = new Konva.Group({ width:CARD.w, height:CARD.h, listening: faceUp && interactive });
 
   if (!faceUp || !cardData) {
-    if (!window.IMG['card_back']) {
-      // Geometric card back fallback
-      group.add(new Konva.Rect({ width: CARD.w, height: CARD.h, fill: '#0A0618', stroke: '#3A0070', strokeWidth: 2, cornerRadius: 4 }));
-      group.add(new Konva.Rect({ x: 5, y: 5, width: CARD.w - 10, height: CARD.h - 10, fill: 'transparent', stroke: '#1E0040', strokeWidth: 1, cornerRadius: 2 }));
-      for (let gx = 16; gx < CARD.w - 5; gx += 16)
-        group.add(new Konva.Line({ points: [gx, 5, gx, CARD.h - 5], stroke: '#150030', strokeWidth: 1 }));
-      for (let gy = 16; gy < CARD.h - 5; gy += 16)
-        group.add(new Konva.Line({ points: [5, gy, CARD.w - 5, gy], stroke: '#150030', strokeWidth: 1 }));
-      const cx = CARD.w / 2, cy = CARD.h / 2;
-      group.add(new Konva.Circle({ x: cx, y: cy, radius: 14, fill: '#150030', stroke: '#6B00AA', strokeWidth: 1 }));
-      group.add(new Konva.Text({ x: cx - 8, y: cy - 9, width: 16, height: 18, text: '✦', fontSize: 12, fill: '#9B59B6', align: 'center' }));
-    } else {
-      group.add(new Konva.Image({ image: window.IMG['card_back'], width: CARD.w, height: CARD.h }));
-    }
-    return group;
+    // Card back — diagonal pattern
+    g.add(new Konva.Rect({ width:CARD.w, height:CARD.h, fill:'#070818', stroke:'#18104A', strokeWidth:2, cornerRadius:5 }));
+    for (let d = -CARD.h; d < CARD.w + CARD.h; d += 10)
+      g.add(new Konva.Line({ points:[d,0,d+CARD.h,CARD.h], stroke:'#0C0A20', strokeWidth:1, listening:false }));
+    const cx = CARD.w/2, cy = CARD.h/2;
+    g.add(new Konva.RegularPolygon({ x:cx, y:cy, sides:4, radius:14, fill:'transparent', stroke:'#1E145A', strokeWidth:1, rotation:45 }));
+    g.add(new Konva.Text({ x:cx-8, y:cy-10, width:16, text:'✦', fontSize:14, fontFamily:'monospace', fill:'#2A1870', align:'center' }));
+    return g;
   }
 
-  const presId = cardData.owner || 'soekarno';
-  const frameImg = window.IMG['frame_' + presId];
+  const presId    = cardData.owner || 'soekarno';
+  const presColor = getPresColor(presId);
+  const presBg    = getPresBg(presId);
+  const isFP      = cardData.isFoulPlay;
+  const isActive  = cardData.type === 'active';
 
-  if (frameImg) {
-    group.add(new Konva.Image({ image: frameImg, width: CARD.w, height: CARD.h }));
-  } else {
-    // Fallback frame
-    const frameColors = { soekarno: '#6B0000', soeharto: '#2A3020', megawati: '#8B0A1E', prabowo: '#0D1117', jokowi: '#0D3B7A' };
-    group.add(new Konva.Rect({ width: CARD.w, height: CARD.h, fill: frameColors[presId] || '#1A1A2E', stroke: '#FFD700', strokeWidth: 2, cornerRadius: 4 }));
+  // Background
+  g.add(new Konva.Rect({ width:CARD.w, height:CARD.h, fill:presBg,
+    stroke: isFP ? '#7A0000' : presColor, strokeWidth: isFP ? 3 : 2, cornerRadius:5 }));
+
+  // Type header strip (22px)
+  const hdrFill  = isFP ? '#3A0000' : isActive ? '#08182A' : '#081A10';
+  const hdrColor = isFP ? '#FF5555' : isActive ? C.blue   : C.green;
+  const hdrText  = isFP ? '☠  FOUL PLAY'         : isActive ? '⚡  AKSI'  : '⏱  PASIF';
+  g.add(new Konva.Rect({ x:0, y:0, width:CARD.w, height:22, fill:hdrFill, cornerRadius:[5,5,0,0] }));
+  g.add(new Konva.Text({ x:0, y:5, width:CARD.w, text:hdrText,
+    fontSize:9, fontFamily:'monospace', fontStyle:'bold', fill:hdrColor, align:'center' }));
+
+  // Art area: large symbol (22–66px)
+  g.add(new Konva.Text({ x:0, y:24, width:CARD.w, text:getCardSymbol(cardData),
+    fontSize:30, fontFamily:'monospace', fill: isFP ? '#CC2222' : presColor, align:'center', opacity:.9 }));
+
+  // Effect summary (66–106px)
+  const lines = getEffectLines(cardData);
+  if (lines[0]) {
+    const lineColor = (lines[0].startsWith('Lawan') || (lines[0].match(/-\d/))) ? C.red : C.green;
+    g.add(new Konva.Text({ x:4, y:64, width:CARD.w-8, text:lines[0],
+      fontSize:11, fontFamily:'monospace', fontStyle:'bold', fill:lineColor,
+      align:'center', wrap:'none', ellipsis:true }));
+  }
+  if (lines[1]) {
+    const lineColor = (lines[1].startsWith('Lawan') || (lines[1].match(/-\d/))) ? '#C0392B' : '#27AE60';
+    g.add(new Konva.Text({ x:4, y:79, width:CARD.w-8, text:lines[1],
+      fontSize:9, fontFamily:'monospace', fill:lineColor,
+      align:'center', wrap:'none', ellipsis:true }));
+  }
+  if (lines.length > 2) {
+    g.add(new Konva.Text({ x:4, y:92, width:CARD.w-8,
+      text:`+ ${lines.length - 2} efek lagi…`,
+      fontSize:8, fontFamily:'monospace', fill:C.muted, align:'center' }));
   }
 
-  // Portrait top-right
-  const portImg = window.IMG['pres_' + presId];
-  if (portImg) group.add(new Konva.Image({ image: portImg, x: CARD.w - 34, y: 3, width: 30, height: 30 }));
+  // Divider + name strip (106–152px)
+  g.add(new Konva.Line({ points:[8,106,CARD.w-8,106], stroke:presColor, strokeWidth:1, opacity:.3 }));
+  g.add(new Konva.Rect({ x:0, y:108, width:CARD.w, height:CARD.h-108, fill:'rgba(0,0,0,.75)', cornerRadius:[0,0,4,4] }));
+  g.add(new Konva.Text({ x:3, y:112, width:CARD.w-6, height:CARD.h-114,
+    text:cardData.name || '', fontSize:9, fontFamily:'monospace', fontStyle:'bold',
+    fill: isFP ? '#FF7070' : C.gold, align:'center', wrap:'word', ellipsis:true }));
 
-  // Icon top-left
-  const iconImg = getIconImg(cardData.iconType);
-  if (iconImg) group.add(new Konva.Image({ image: iconImg, x: 3, y: 3, width: 20, height: 20 }));
-
-  // Type badge
-  const isActive = cardData.type === 'active';
-  const badgeFill  = cardData.isFoulPlay ? '#3B0000' : isActive ? '#5C0000' : '#0D2144';
-  const badgeColor = cardData.isFoulPlay ? '#FF6B6B' : isActive ? '#FF9999' : '#7FB8F0';
-  group.add(new Konva.Rect({ x: CARD.w / 2 - 24, y: 26, width: 48, height: 12, fill: badgeFill, cornerRadius: 2 }));
-  group.add(new Konva.Text({
-    x: CARD.w / 2 - 24, y: 28, width: 48, height: 10,
-    text: cardData.isFoulPlay ? 'FOUL PLAY' : isActive ? 'ACTIVE' : 'PASSIVE',
-    fontSize: 7, fontFamily: 'monospace', fontStyle: 'bold',
-    fill: badgeColor, align: 'center',
-  }));
-
-  // Description
-  group.add(new Konva.Text({
-    x: 4, y: 42, width: CARD.w - 8, height: 60,
-    text: cardData.description || '',
-    fontSize: 7, fontFamily: 'monospace', fill: '#999', wrap: 'word', ellipsis: true,
-  }));
-
-  // Bottom name strip
-  group.add(new Konva.Rect({ x: 0, y: CARD.h - 30, width: CARD.w, height: 30, fill: 'rgba(0,0,0,0.85)', cornerRadius: [0, 0, 3, 3] }));
-  group.add(new Konva.Text({
-    x: 4, y: CARD.h - 28, width: CARD.w - 8, height: 26,
-    text: cardData.name || '', fontSize: 9, fontFamily: 'monospace', fontStyle: 'bold',
-    fill: cardData.isFoulPlay ? '#FF6B6B' : '#FFD700', wrap: 'word', ellipsis: true,
-  }));
+  // Dimmed overlay
+  if (dimmed) {
+    g.add(new Konva.Rect({ width:CARD.w, height:CARD.h, fill:'rgba(0,0,0,.6)', cornerRadius:5 }));
+  }
 
   if (interactive && onClick) {
-    const glowColor = PRES_GLOW_COLOR[presId] || '#FFD700';
-    group.on('mouseover', (e) => {
+    g.on('mouseover', (e) => {
       document.body.style.cursor = 'pointer';
-      group.to({ scaleX: 1.12, scaleY: 1.12, offsetX: CARD.w * 0.06, offsetY: CARD.h * 0.06,
-        shadowColor: glowColor, shadowBlur: 24, shadowOpacity: 0.7, duration: 0.12 });
+      g.to({ scaleX:1.1, scaleY:1.1, offsetX:CARD.w*.05, offsetY:CARD.h*.05, duration:.1 });
       showCardTooltip(cardData, e.evt.clientX, e.evt.clientY);
       L.hands.draw();
     });
-    group.on('mousemove', (e) => moveCardTooltip(e.evt.clientX, e.evt.clientY));
-    group.on('mouseout', () => {
+    g.on('mousemove', (e) => _moveTooltip(e.evt.clientX, e.evt.clientY));
+    g.on('mouseout', () => {
       document.body.style.cursor = 'default';
-      group.to({ scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0,
-        shadowColor: 'black', shadowBlur: 0, shadowOpacity: 0, duration: 0.12 });
+      g.to({ scaleX:1, scaleY:1, offsetX:0, offsetY:0, duration:.1 });
       hideCardTooltip();
       L.hands.draw();
     });
-    group.on('click', () => onClick(cardData));
-  } else if (faceUp) {
-    group.opacity(0.45);
+    g.on('click', () => onClick(cardData));
   }
-
-  return group;
+  return g;
 }
 
-// ── Card play animation ────────────────────────────────────────────────────
+// ── Mini card (play zone display) ──────────────────────────────────────────────
+function makeMiniCard(instanceId) {
+  const g = new Konva.Group({ width:MINI.w, height:MINI.h });
+  if (!instanceId) {
+    g.add(new Konva.Rect({ width:MINI.w, height:MINI.h, fill:'#060D18', stroke:'#1A2A40', strokeWidth:1, cornerRadius:3, dash:[4,3] }));
+    g.add(new Konva.Text({ y:MINI.h/2-10, width:MINI.w, text:'—', fontSize:16, fontFamily:'monospace', fill:'#1A2A40', align:'center' }));
+    return g;
+  }
+  const cd = getCardData(instanceId);
+  if (!cd) { g.add(new Konva.Rect({ width:MINI.w, height:MINI.h, fill:'#0A1018', stroke:'#1A2A40', strokeWidth:1, cornerRadius:3 })); return g; }
 
-function animateCardPlay(sourceGroup, instanceId) {
-  const abs = sourceGroup.getAbsolutePosition();
-  const clone = sourceGroup.clone();
-  clone.x(abs.x); clone.y(abs.y);
+  const presColor = getPresColor(cd.owner);
+  const presBg    = getPresBg(cd.owner);
+  const isFP = cd.isFoulPlay;
+
+  g.add(new Konva.Rect({ width:MINI.w, height:MINI.h, fill:presBg, stroke: isFP ? '#8B0000' : presColor, strokeWidth:2, cornerRadius:3 }));
+  const hdrColor = isFP ? '#FF5555' : cd.type === 'active' ? C.blue : C.green;
+  g.add(new Konva.Text({ x:0, y:3, width:MINI.w, text: isFP ? '☠ FP' : cd.type === 'active' ? '⚡ AKSI' : '⏱ PASIF',
+    fontSize:8, fontFamily:'monospace', fontStyle:'bold', fill:hdrColor, align:'center' }));
+  g.add(new Konva.Text({ x:0, y:16, width:MINI.w, text:getCardSymbol(cd),
+    fontSize:22, fontFamily:'monospace', fill:presColor, align:'center' }));
+  const lines = getEffectLines(cd);
+  if (lines[0]) {
+    const lc = (lines[0].startsWith('Lawan') || lines[0].match(/-\d/)) ? C.red : C.green;
+    g.add(new Konva.Text({ x:2, y:42, width:MINI.w-4, text:lines[0],
+      fontSize:8, fontFamily:'monospace', fill:lc, align:'center', wrap:'none', ellipsis:true }));
+  }
+  g.add(new Konva.Rect({ x:0, y:MINI.h-22, width:MINI.w, height:22, fill:'rgba(0,0,0,.8)', cornerRadius:[0,0,2,2] }));
+  g.add(new Konva.Text({ x:2, y:MINI.h-20, width:MINI.w-4, height:20,
+    text:cd.name || '', fontSize:8, fontFamily:'monospace', fontStyle:'bold',
+    fill: isFP ? '#FF7070' : C.gold, align:'center', wrap:'word', ellipsis:true }));
+  return g;
+}
+
+// ── Card animation ─────────────────────────────────────────────────────────────
+function animateCardPlay(srcGroup, callback) {
+  const abs = srcGroup.getAbsolutePosition();
+  const clone = srcGroup.clone();
+  clone.position({ x:abs.x, y:abs.y });
   L.anim.add(clone);
-  L.anim.draw();
-
-  const targetX = LAYOUT.playarea.x + LAYOUT.playarea.w / 2 - CARD.w / 2;
-  const targetY = LAYOUT.playarea.y + LAYOUT.playarea.h / 2 - CARD.h / 2;
-
-  clone.to({
-    x: targetX, y: targetY, scaleX: 1.2, scaleY: 1.2, duration: 0.22,
-    onFinish: () => {
-      clone.to({
-        scaleX: 0, scaleY: 0, opacity: 0, duration: 0.14,
-        onFinish: () => { clone.destroy(); L.anim.draw(); window.client.playCard(instanceId); }
-      });
-    },
-  });
-  L.anim.draw();
+  const tx = STAGE_W/2 - CARD.w/2;
+  const ty = LAYOUT.playZone.y + LAYOUT.playZone.h/2 - CARD.h/2;
+  clone.to({ x:tx, y:ty, scaleX:1.15, scaleY:1.15, duration:.2, onFinish: () => {
+    clone.to({ scaleX:0, scaleY:0, opacity:0, duration:.15, onFinish: () => {
+      clone.destroy(); L.anim.draw(); callback();
+    }});
+  }});
 }
 
-// ── Hand renderer ──────────────────────────────────────────────────────────
-
-function renderHand(cardsOrCount, area, faceUp, interactive, lockedTypes = []) {
-  L.hands.find('.' + (area === LAYOUT.p1hand ? 'p1hand' : 'p2hand')).forEach(n => n.destroy());
+// ── Hand renderer ──────────────────────────────────────────────────────────────
+function renderHand(cardsOrCount, area, faceUp, interactive, lockedTypes = [], cardAlreadyPlayed = false) {
+  const cls = area.y < 200 ? 'opphand' : 'myhand';
+  L.hands.find('.' + cls).forEach(n => n.destroy());
 
   const count = faceUp ? cardsOrCount.length : cardsOrCount;
-  const visCount = Math.min(count, 7);
-  if (visCount === 0) { L.hands.draw(); return; }
+  if (count === 0) { L.hands.draw(); return; }
 
-  const totalW = CARD.w + (visCount - 1) * CARD_GAP;
-  const startX = area.x + Math.max(0, (area.w - totalW) / 2);
+  const vis    = Math.min(count, 9);
+  const step   = Math.min(130, (area.w - 80 - CARD.w) / Math.max(vis - 1, 1));
+  const totalW = CARD.w + (vis - 1) * step;
+  const startX = area.x + (area.w - totalW) / 2;
   const startY = area.y + (area.h - CARD.h) / 2;
-  const className = area === LAYOUT.p1hand ? 'p1hand' : 'p2hand';
 
   if (!faceUp) {
-    for (let i = 0; i < visCount; i++) {
-      const card = makeCard(null, false);
-      card.name(className); card.x(startX + i * CARD_GAP); card.y(startY);
-      L.hands.add(card);
+    for (let i = 0; i < vis; i++) {
+      const c = makeCard(null, false);
+      c.name(cls); c.x(startX + i * step); c.y(startY); L.hands.add(c);
     }
-    const lbl = new Konva.Text({
-      name: className, x: area.x, y: area.y + area.h - 22, width: area.w,
-      text: `× ${count}`, fontSize: 12, fontFamily: 'monospace', fill: '#FFD700', align: 'center',
-    });
-    L.hands.add(lbl);
-    L.hands.draw();
-    return;
+    if (count > vis) {
+      L.hands.add(new Konva.Text({
+        name:cls, x:startX + vis * step + 6, y:startY + CARD.h/2 - 10,
+        text:`+${count - vis}`, fontSize:14, fontFamily:'monospace', fill:C.muted,
+      }));
+    }
+    L.hands.draw(); return;
   }
 
-  cardsOrCount.slice(0, 7).forEach((cardData, i) => {
-    const isCardLocked = interactive && !cardData.isFoulPlay &&
-      ((cardData.type === 'active'  && lockedTypes.includes('active')) ||
-       (cardData.type === 'passive' && lockedTypes.includes('passive')));
+  cardsOrCount.slice(0, 9).forEach((cd, i) => {
+    const locked      = interactive && !cd.isFoulPlay &&
+      ((cd.type === 'active'  && lockedTypes.includes('active')) ||
+       (cd.type === 'passive' && lockedTypes.includes('passive')));
+    const spentNonFP  = interactive && cardAlreadyPlayed && !cd.isFoulPlay;
+    const canClick    = interactive && !locked && !spentNonFP;
+    const dimmed      = locked || spentNonFP || (!interactive && faceUp);
 
-    const handleClick = (cd) => {
-      if (isCardLocked) return;
-      if (cd.isFoulPlay) {
-        window.client.loadFoulPlay(cd.instanceId);
+    const handleClick = (c) => {
+      if (!canClick) return;
+      if (c.isFoulPlay) {
+        window.client.loadFoulPlay(c.instanceId);
       } else {
-        const srcGrp = L.hands.find('.' + className)[i];
-        if (srcGrp) animateCardPlay(srcGrp, cd.instanceId);
-        else window.client.playCard(cd.instanceId);
+        // Find the group among hand children for animation
+        const grps = L.hands.getChildren().filter(n => n.name && n.name() === cls && n.getClassName() === 'Group');
+        const grp  = grps[i];
+        if (grp) animateCardPlay(grp, () => window.client.playCard(c.instanceId));
+        else window.client.playCard(c.instanceId);
       }
     };
-    const card = makeCard(cardData, true, interactive && !isCardLocked, interactive && !isCardLocked ? handleClick : null);
-    if (isCardLocked) {
-      card.opacity(0.35);
-      // Lock badge overlay
-      const badge = new Konva.Group({ name: className });
-      badge.add(new Konva.Rect({ x: CARD.w / 2 - 18, y: CARD.h / 2 - 10, width: 36, height: 20, fill: '#3B0000', cornerRadius: 3, opacity: 0.9 }));
-      badge.add(new Konva.Text({ x: CARD.w / 2 - 18, y: CARD.h / 2 - 8, width: 36, text: '🔒 LOCKED', fontSize: 6, fontFamily: 'monospace', fill: '#E74C3C', align: 'center' }));
-      badge.x(startX + i * CARD_GAP); badge.y(startY);
-      L.hands.add(badge);
+
+    const card = makeCard(cd, true, canClick, canClick ? handleClick : null, dimmed);
+
+    // Status badge
+    if (locked) {
+      card.add(new Konva.Text({ x:0, y:CARD.h/2-9, width:CARD.w,
+        text:'🔒 TERKUNCI', fontSize:9, fontFamily:'monospace', fill:C.red, align:'center' }));
+    } else if (spentNonFP) {
+      card.add(new Konva.Text({ x:0, y:CARD.h/2-9, width:CARD.w,
+        text:'✓ SUDAH DIPUTAR', fontSize:9, fontFamily:'monospace', fill:'#6A7A8A', align:'center' }));
+    } else if (interactive && cd.isFoulPlay && !window._gameState?.players?.[window.client?.playerRole]?.foulPlaySlot) {
+      // FP card available to load — subtle hint
+      card.add(new Konva.Text({ x:0, y:CARD.h-16, width:CARD.w,
+        text:'↓ klik utk muat', fontSize:7, fontFamily:'monospace', fill:'#9B59B6', align:'center' }));
     }
-    card.name(className); card.x(startX + i * CARD_GAP); card.y(startY);
+
+    card.name(cls); card.x(startX + i * step); card.y(startY);
     L.hands.add(card);
   });
   L.hands.draw();
 }
 
-// ── Foul play slot ─────────────────────────────────────────────────────────
+// ── Aspect table — 5 columns ───────────────────────────────────────────────────
+const ASPECTS    = ['Ekonomi', 'Kesehatan', 'Keamanan', 'Pendidikan', 'Infrastruktur'];
+const ASP_SYMBOL = { Ekonomi:'₿', Kesehatan:'✚', Keamanan:'⚔', Pendidikan:'✎', Infrastruktur:'⌂' };
+const COL_W      = STAGE_W / 5; // 256px
 
-function makeFoulPlaySlot(area, label, isLoaded, isLocked, slotId) {
-  const g = new Konva.Group();
-  const bx = area.x + 6, by = area.y + 6, bw = area.w - 12, bh = area.h - 12;
-
-  g.add(new Konva.Rect({
-    x: bx, y: by, width: bw, height: bh, fill: '#080812',
-    stroke: isLoaded ? (label === 'MY FOUL PLAY' ? '#9B59B6' : '#C8102E') : '#222',
-    strokeWidth: isLoaded ? 3 : 2, dash: isLoaded ? [] : [6, 4], cornerRadius: 6,
-    shadowColor: isLoaded ? '#9B59B6' : 'transparent', shadowBlur: isLoaded ? 28 : 0, shadowOpacity: isLoaded ? 0.9 : 0,
-  }));
-
-  g.add(new Konva.Text({
-    x: bx, y: by + 4, width: bw, text: label,
-    fontSize: 8, fontFamily: 'monospace', fill: '#444', align: 'center',
-  }));
-
-  const icon = window.IMG['fp_slot'];
-  if (icon) g.add(new Konva.Image({ image: icon, x: bx + bw / 2 - 16, y: by + 18, width: 32, height: 32, opacity: isLoaded ? 1 : 0.25 }));
-
-  g.add(new Konva.Text({
-    x: bx, y: by + 56, width: bw,
-    text: isLocked ? `LOCKED` : (isLoaded ? '✦ LOADED' : 'EMPTY'),
-    fontSize: 9, fontFamily: 'monospace', fontStyle: isLoaded ? 'bold' : 'normal',
-    fill: isLocked ? '#E74C3C' : (isLoaded ? '#C39BD3' : '#333'), align: 'center',
-  }));
-
-  if (slotId && isLoaded) {
-    const cardData = getCardData(slotId);
-    if (cardData) {
-      g.listening(true);
-      g.on('mouseover', (e) => showCardTooltip(cardData, e.evt.clientX, e.evt.clientY));
-      g.on('mousemove', (e) => moveCardTooltip(e.evt.clientX, e.evt.clientY));
-      g.on('mouseout', () => hideCardTooltip());
-    }
-  }
-
-  return g;
-}
-
-// ── Aspect table ───────────────────────────────────────────────────────────
-
-const ASPECTS = ['Ekonomi', 'Kesehatan', 'Keamanan', 'Pendidikan', 'Infrastruktur'];
-const ASP_ICON = { Ekonomi: 'asp_ekonomi', Kesehatan: 'asp_kesehatan', Keamanan: 'asp_keamanan', Pendidikan: 'asp_pendidikan', Infrastruktur: 'asp_infra' };
-const scoreTexts = { p1: {}, p2: {} };
-const scoreBars  = { p1: {}, p2: {} };
-const BAR_MAX_W  = { p2: 0, p1: 0 }; // set in buildAspectTable
-
-// Tracks previous aspect values to compute deltas for floating numbers
+const scoreTexts = { p1:{}, p2:{} };
+const scoreBars  = { p1:{}, p2:{} };
 let _prevAspects = null;
 
-function spawnDeltaFloat(x, y, delta) {
+function spawnDelta(x, y, delta) {
   if (!delta) return;
-  const isPos = delta > 0;
-  const text   = (isPos ? '+' : '') + delta;
-  const chipW  = text.length * 8 + 14;
-  const chipH  = 22;
-  const chipFill  = isPos ? 'rgba(46,204,113,0.88)' : 'rgba(231,76,60,0.88)';
-  const glowColor = isPos ? '#2ECC71' : '#E74C3C';
-
-  const g = new Konva.Group({ x: x - chipW / 2, y, listening: false });
-  g.add(new Konva.Rect({
-    width: chipW, height: chipH, fill: chipFill, cornerRadius: chipH / 2,
-    shadowColor: glowColor, shadowBlur: 10, shadowOpacity: 0.7,
-  }));
-  g.add(new Konva.Text({
-    width: chipW, height: chipH, text,
-    fontSize: 12, fontFamily: 'monospace', fontStyle: 'bold',
-    fill: '#FFFFFF', align: 'center', verticalAlign: 'middle',
-  }));
-  L.anim.add(g);
-  L.anim.draw();
-  g.to({
-    y: y + (isPos ? -52 : 52), opacity: 0, duration: 1.3,
-    onFinish: () => { g.destroy(); L.anim.draw(); },
-  });
+  const sign = delta > 0 ? '+' : '';
+  const txt  = sign + delta;
+  const cw   = txt.length * 9 + 18, ch = 22;
+  const col  = delta > 0 ? C.green : C.red;
+  const g    = new Konva.Group({ x:x - cw/2, y, listening:false });
+  g.add(new Konva.Rect({ width:cw, height:ch, fill:col, cornerRadius:ch/2, opacity:.88, shadowColor:col, shadowBlur:8, shadowOpacity:.55 }));
+  g.add(new Konva.Text({ width:cw, height:ch, text:txt, fontSize:13, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center', verticalAlign:'middle' }));
+  L.anim.add(g); L.anim.draw();
+  g.to({ y:y+(delta>0?-50:50), opacity:0, duration:1.2, onFinish:()=>{ g.destroy(); L.anim.draw(); }});
 }
 
-const deckCountTexts = { p1: null, p2: null };
-
-function buildDeckCounters() {
-  const { x, y, w, h } = LAYOUT.playarea;
-  deckCountTexts.p2 = new Konva.Text({
-    x, y: y + 14, width: w,
-    text: 'P2  DECK:-- HAND:--',
-    fontSize: 10, fontFamily: 'monospace', fill: '#444', align: 'center',
-  });
-  deckCountTexts.p1 = new Konva.Text({
-    x, y: y + h - 30, width: w,
-    text: 'P1  DECK:-- HAND:--',
-    fontSize: 10, fontFamily: 'monospace', fill: '#444', align: 'center',
-  });
-  L.board.add(deckCountTexts.p2);
-  L.board.add(deckCountTexts.p1);
-  L.board.draw();
+function tweenBar(node, maxW, val) {
+  const tgt = Math.max(2, (Math.min(100, Math.max(0, val)) / 100) * maxW);
+  if (Math.abs(node.width() - tgt) < .5) { node.width(tgt); return; }
+  const t0 = Date.now(), dur = 400, s0 = node.width();
+  const a = new Konva.Animation(() => {
+    const p = Math.min((Date.now()-t0)/dur, 1);
+    node.width(s0 + (tgt-s0)*p);
+    if (p >= 1) { node.width(tgt); a.stop(); }
+  }, L.board);
+  a.start();
 }
 
-function updateDeckCounters(state) {
-  if (!deckCountTexts.p1) return;
-  const mk = (role) => {
-    const d = (state.players[role].deck || []).length;
-    const h = (state.players[role].hand || []).length;
-    return `${role.toUpperCase()}  DECK:${String(d).padStart(2)} HAND:${String(h).padStart(2)}`;
-  };
-  deckCountTexts.p1.text(mk('p1'));
-  deckCountTexts.p2.text(mk('p2'));
-  L.board.draw();
+function tweenNum(node, tgt) {
+  const s = parseInt(node.text()) || 0;
+  if (s === tgt) return;
+  const t0 = Date.now(), dur = 400;
+  const a = new Konva.Animation(() => {
+    const p = Math.min((Date.now()-t0)/dur, 1);
+    node.text(String(Math.round(s + (tgt-s)*p)));
+    if (p >= 1) { node.text(String(tgt)); a.stop(); }
+  }, L.board);
+  a.start();
 }
 
 function buildAspectTable() {
-  const { x, y } = LAYOUT.aspects;
-  const rowH = 48;
-  const mid  = x + LAYOUT.aspects.w / 2;
+  const ay = LAYOUT.aspects.y, ah = LAYOUT.aspects.h;
+  L.board.add(new Konva.Rect({ x:0, y:ay, width:STAGE_W, height:ah, fill:'rgba(5,11,24,.55)', listening:false }));
 
-  BAR_MAX_W.p2 = mid - x - 80;
-  BAR_MAX_W.p1 = x + LAYOUT.aspects.w - (mid + 80);
-
-  // Column headers — bold, prominent
-  L.board.add(new Konva.Text({ x: x + 10, y: y - 20, text: 'P2', fontSize: 13, fontFamily: 'monospace', fontStyle: 'bold', fill: '#AAAAAA' }));
-  L.board.add(new Konva.Text({ x: x + LAYOUT.aspects.w - 34, y: y - 20, text: 'P1', fontSize: 13, fontFamily: 'monospace', fontStyle: 'bold', fill: '#AAAAAA' }));
+  // Row labels
+  L.board.add(new Konva.Text({ x:0, y:ay+20, width:STAGE_W/2-10, text:'LAWAN', fontSize:10, fontFamily:'monospace', fill:C.muted, align:'right' }));
+  L.board.add(new Konva.Text({ x:STAGE_W/2+10, y:ay+20, width:STAGE_W/2-10, text:'KAMU', fontSize:10, fontFamily:'monospace', fill:C.muted }));
 
   ASPECTS.forEach((asp, i) => {
-    const ry = y + i * rowH;
+    const cx = i * COL_W;
+    if (i > 0) L.board.add(new Konva.Line({ points:[cx,ay+4,cx,ay+ah-4], stroke:C.border, strokeWidth:1, listening:false }));
 
-    // Alternating row tint
-    if (i % 2 === 0) {
-      L.board.add(new Konva.Rect({ x, y: ry, width: LAYOUT.aspects.w, height: rowH - 2, fill: 'rgba(255,255,255,0.018)', cornerRadius: 1, listening: false }));
-    }
+    // Aspect name + symbol
+    L.board.add(new Konva.Text({ x:cx, y:ay+4, width:COL_W,
+      text:`${ASP_SYMBOL[asp]}  ${asp.toUpperCase()}`,
+      fontSize:10, fontFamily:'monospace', fill:C.muted, align:'center' }));
 
-    // Icon
-    const aspImg = window.IMG[ASP_ICON[asp]];
-    if (aspImg) L.board.add(new Konva.Image({ image: aspImg, x: mid - 12, y: ry + 12, width: 24, height: 24 }));
-    else L.board.add(new Konva.Rect({ x: mid - 12, y: ry + 12, width: 24, height: 24, fill: '#333' }));
-
-    // Aspect name
-    L.board.add(new Konva.Text({ x: mid - 60, y: ry + 18, text: asp, fontSize: 11, fontFamily: 'monospace', fill: '#888', width: 48, align: 'right' }));
-
-    // Divider
-    L.board.add(new Konva.Line({ points: [x, ry + rowH - 2, x + LAYOUT.aspects.w, ry + rowH - 2], stroke: '#1A1A2E', strokeWidth: 1 }));
-
-    // P2 score (left)
-    scoreTexts.p2[asp] = new Konva.Text({
-      x: x, y: ry + 10, width: mid - x - 70, text: '50',
-      fontSize: 22, fontFamily: 'monospace', fontStyle: 'bold', fill: '#FFF', align: 'right',
-    });
+    // Opp score
+    scoreTexts.p2[asp] = new Konva.Text({ x:cx+4, y:ay+18, width:COL_W-8, text:'50',
+      fontSize:28, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center' });
     L.board.add(scoreTexts.p2[asp]);
 
-    // P1 score (right)
-    scoreTexts.p1[asp] = new Konva.Text({
-      x: mid + 70, y: ry + 10, width: x + LAYOUT.aspects.w - (mid + 70), text: '50',
-      fontSize: 22, fontFamily: 'monospace', fontStyle: 'bold', fill: '#FFF', align: 'left',
-    });
-    L.board.add(scoreTexts.p1[asp]);
-
-    // Bar backgrounds (P2 left grows left→right, P1 right grows left→right)
-    L.board.add(new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2, height: 10, fill: '#111122', cornerRadius: 3 }));
-    L.board.add(new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1, height: 10, fill: '#111122', cornerRadius: 3 }));
-
-    // Bar fills — start at 50%
-    scoreBars.p2[asp] = new Konva.Rect({ x: x, y: ry + 36, width: BAR_MAX_W.p2 * 0.5, height: 10, fill: '#2ECC71', cornerRadius: 3 });
-    scoreBars.p1[asp] = new Konva.Rect({ x: mid + 80, y: ry + 36, width: BAR_MAX_W.p1 * 0.5, height: 10, fill: '#2ECC71', cornerRadius: 3 });
+    // Opp bar
+    const bx = cx+10, bw = COL_W-20;
+    L.board.add(new Konva.Rect({ x:bx, y:ay+52, width:bw, height:8, fill:'#0A1520', cornerRadius:2 }));
+    scoreBars.p2[asp] = new Konva.Rect({ x:bx, y:ay+52, width:bw*.5, height:8, fill:C.green, cornerRadius:2 });
     L.board.add(scoreBars.p2[asp]);
+
+    // VS divider
+    L.board.add(new Konva.Text({ x:cx, y:ay+62, width:COL_W, text:'─ VS ─',
+      fontSize:8, fontFamily:'monospace', fill:'#1A2A40', align:'center' }));
+
+    // My bar
+    L.board.add(new Konva.Rect({ x:bx, y:ay+74, width:bw, height:8, fill:'#0A1520', cornerRadius:2 }));
+    scoreBars.p1[asp] = new Konva.Rect({ x:bx, y:ay+74, width:bw*.5, height:8, fill:C.green, cornerRadius:2 });
     L.board.add(scoreBars.p1[asp]);
+
+    // My score
+    scoreTexts.p1[asp] = new Konva.Text({ x:cx+4, y:ay+86, width:COL_W-8, text:'50',
+      fontSize:28, fontFamily:'monospace', fontStyle:'bold', fill:'#fff', align:'center' });
+    L.board.add(scoreTexts.p1[asp]);
   });
-
   L.board.draw();
-}
-
-function tweenBar(barNode, maxW, targetVal) {
-  const targetW = Math.max(2, (Math.min(100, Math.max(0, targetVal)) / 100) * maxW);
-  const startW  = barNode.width();
-  if (Math.abs(startW - targetW) < 0.5) return;
-  const t0 = Date.now(), dur = 400;
-  const anim = new Konva.Animation(() => {
-    const pct = Math.min((Date.now() - t0) / dur, 1);
-    barNode.width(startW + (targetW - startW) * pct);
-    if (pct >= 1) anim.stop();
-  }, L.board);
-  anim.start();
-}
-
-function tweenNumber(textNode, target) {
-  const start = parseInt(textNode.text()) || 0;
-  if (start === target) return;
-  const t0 = Date.now(), dur = 400;
-  const anim = new Konva.Animation(() => {
-    const pct = Math.min((Date.now() - t0) / dur, 1);
-    textNode.text(String(Math.round(start + (target - start) * pct)));
-    if (pct >= 1) anim.stop();
-  }, L.board);
-  anim.start();
 }
 
 function updateAspectScores(state) {
-  const { x, y } = LAYOUT.aspects;
-  const mid = x + LAYOUT.aspects.w / 2;
-
+  const ay = LAYOUT.aspects.y;
   ASPECTS.forEach((asp, i) => {
     const p1v = state.players.p1.aspects[asp];
     const p2v = state.players.p2.aspects[asp];
-    const ry  = y + i * 48;
-
+    const mx  = i * COL_W + COL_W/2;
     if (_prevAspects) {
       const dp1 = p1v - (_prevAspects.p1[asp] ?? p1v);
       const dp2 = p2v - (_prevAspects.p2[asp] ?? p2v);
-      if (dp1 !== 0) spawnDeltaFloat(mid + 90, ry + 8, Math.round(dp1));
-      if (dp2 !== 0) spawnDeltaFloat(x + 30,  ry + 8, Math.round(dp2));
+      if (dp1 !== 0) spawnDelta(mx, ay+86, Math.round(dp1));
+      if (dp2 !== 0) spawnDelta(mx, ay+18, Math.round(dp2));
     }
-
-    tweenNumber(scoreTexts.p1[asp], p1v);
-    tweenNumber(scoreTexts.p2[asp], p2v);
-    const p1col = p1v > p2v ? '#2ECC71' : p1v < p2v ? '#E74C3C' : '#FFFFFF';
-    const p2col = p2v > p1v ? '#2ECC71' : p2v < p1v ? '#E74C3C' : '#FFFFFF';
-    scoreTexts.p1[asp].fill(p1col);
-    scoreTexts.p2[asp].fill(p2col);
-    tweenBar(scoreBars.p1[asp], BAR_MAX_W.p1, p1v);
-    tweenBar(scoreBars.p2[asp], BAR_MAX_W.p2, p2v);
-    // Bar color based on absolute health, not relative win/loss
-    scoreBars.p1[asp].fill(healthColor(p1v));
-    scoreBars.p2[asp].fill(healthColor(p2v));
+    tweenNum(scoreTexts.p1[asp], p1v);
+    tweenNum(scoreTexts.p2[asp], p2v);
+    scoreTexts.p1[asp].fill(p1v > p2v ? C.green : p1v < p2v ? C.red : C.text);
+    scoreTexts.p2[asp].fill(p2v > p1v ? C.green : p2v < p1v ? C.red : C.text);
+    const bw = COL_W - 20;
+    tweenBar(scoreBars.p1[asp], bw, p1v); scoreBars.p1[asp].fill(healthColor(p1v));
+    tweenBar(scoreBars.p2[asp], bw, p2v); scoreBars.p2[asp].fill(healthColor(p2v));
   });
-
-  if (!_prevAspects) _prevAspects = { p1: {}, p2: {} };
-  ASPECTS.forEach(asp => {
-    _prevAspects.p1[asp] = state.players.p1.aspects[asp];
-    _prevAspects.p2[asp] = state.players.p2.aspects[asp];
-  });
-
+  if (!_prevAspects) _prevAspects = { p1:{}, p2:{} };
+  ASPECTS.forEach(a => { _prevAspects.p1[a] = state.players.p1.aspects[a]; _prevAspects.p2[a] = state.players.p2.aspects[a]; });
   L.board.draw();
 }
 
-// ── Round info ─────────────────────────────────────────────────────────────
+// ── Opponent info bar ──────────────────────────────────────────────────────────
+const OB = {};
+let _thinkingTimer = null;
 
-const RI = {};
+function buildOppBar() {
+  const { y, h } = LAYOUT.oppBar;
+  L.board.add(new Konva.Rect({ x:0, y, width:STAGE_W, height:h, fill:'#07101C', listening:false }));
 
-function buildRoundInfo() {
-  const { x, y, w, h } = LAYOUT.roundinfo;
-  L.board.add(new Konva.Rect({ x, y, width: w, height: h, fill: '#0D0D1F', stroke: '#1A1A3A', strokeWidth: 1, cornerRadius: 4 }));
+  OB.strip  = new Konva.Rect({ x:0, y, width:4, height:h, fill:C.gold });
+  OB.name   = new Konva.Text({ x:12, y:y+7,  text:'LAWAN', fontSize:15, fontFamily:'monospace', fontStyle:'bold', fill:C.muted });
+  OB.tag    = new Konva.Text({ x:12, y:y+26, text:'',      fontSize:10, fontFamily:'monospace', fill:'#344455' });
+  OB.counts = new Konva.Text({ x:STAGE_W/2-120, y:y+14, width:240, text:'DECK: — | HAND: —', fontSize:11, fontFamily:'monospace', fill:C.muted, align:'center' });
+  OB.think  = new Konva.Text({ x:STAGE_W-280, y:y+8,  width:268, text:'', fontSize:12, fontFamily:'monospace', fill:C.muted, align:'right' });
+  OB.fp     = new Konva.Text({ x:STAGE_W-280, y:y+26, width:268, text:'', fontSize:10, fontFamily:'monospace', fill:'#9B59B6', align:'right' });
 
-  RI.round  = new Konva.Text({ x, y: y + 8, width: w, text: 'ROUND 1 / 7', fontSize: 16, fontFamily: 'monospace', fontStyle: 'bold', fill: '#FFD700', align: 'center' });
-  RI.turn   = new Konva.Text({ x, y: y + 32, width: w, text: 'TURN 1 / 5', fontSize: 11, fontFamily: 'monospace', fill: '#AAAAAA', align: 'center' });
-  // Pill background behind the active-player indicator
-  RI.activeBg = new Konva.Rect({ x: x + 18, y: y + 47, width: w - 36, height: 20, fill: 'rgba(46,204,113,0.12)', stroke: '#1A5C38', strokeWidth: 1, cornerRadius: 4 });
-  RI.active   = new Konva.Text({ x, y: y + 50, width: w, text: '—', fontSize: 11, fontFamily: 'monospace', fontStyle: 'bold', fill: '#2ECC71', align: 'center' });
+  [OB.strip, OB.name, OB.tag, OB.counts, OB.think, OB.fp].forEach(n => L.board.add(n));
+  L.board.draw();
+}
 
-  RI.pips = [];
-  const pipY = y + 76, pipSpacing = w / 8, pipStartX = x + pipSpacing / 2;
+function updateOppBar(state, myRole) {
+  const oppRole  = myRole === 'p1' ? 'p2' : 'p1';
+  const opp      = state.players[oppRole];
+  const presData = (window.PRESIDENT_DATA || []).find(p => p.id === opp.presidentId);
+  const presCol  = getPresColor(opp.presidentId);
+  const isOppTurn = state.activePlayer === oppRole;
+
+  OB.strip.fill(presCol);
+  OB.name.text(presData ? presData.displayName : 'LAWAN');
+  OB.name.fill(isOppTurn ? C.red : '#5A6E84');
+  OB.tag.text(presData ? presData.tagline : '');
+  OB.counts.text(`DECK: ${(opp.deck||[]).length} | HAND: ${(opp.hand||[]).length}`);
+  OB.fp.text(opp.foulPlaySlot ? '⚠ FOUL PLAY SIAP' : '');
+
+  if (isOppTurn) {
+    if (!_thinkingTimer) {
+      let dots = 0;
+      _thinkingTimer = setInterval(() => {
+        dots = (dots+1) % 4;
+        OB.think.text('Menunggu lawan' + '.'.repeat(dots));
+        L.board.draw();
+      }, 500);
+    }
+  } else {
+    if (_thinkingTimer) { clearInterval(_thinkingTimer); _thinkingTimer = null; }
+    OB.think.text('');
+  }
+  L.board.draw();
+}
+
+// ── Play zone ──────────────────────────────────────────────────────────────────
+const PZ = {};
+let _sdBorderAnim=null, _sdBorder=null, _sdLabel=null, _sdOverlay=null;
+
+function buildPlayZone() {
+  const { y, h } = LAYOUT.playZone;
+  L.play.add(new Konva.Rect({ x:0, y, width:STAGE_W, height:h, fill:'#070E1A', listening:false }));
+
+  // Left — opponent last card
+  L.play.add(new Konva.Text({ x:20, y:y+4, text:'KARTU LAWAN', fontSize:9, fontFamily:'monospace', fill:'#2A3A50' }));
+  PZ.oppCard = new Konva.Group({ x:20, y:y+18 });
+  L.play.add(PZ.oppCard);
+
+  // Centre — round info
+  const cx = STAGE_W/2;
+  PZ.round  = new Konva.Text({ x:cx-160, y:y+6,  width:320, text:'RONDE 1 / 7', fontSize:20, fontFamily:'monospace', fontStyle:'bold', fill:C.gold, align:'center' });
+  PZ.turns  = new Konva.Text({ x:cx-160, y:y+32, width:320, text:'GILIRAN 1 / 5', fontSize:12, fontFamily:'monospace', fill:C.text, align:'center' });
+  PZ.actBg  = new Konva.Rect({ x:cx-110, y:y+52, width:220, height:28, fill:'rgba(46,204,113,.1)', stroke:'#1A5C38', strokeWidth:1, cornerRadius:3 });
+  PZ.actTxt = new Konva.Text({ x:cx-110, y:y+61, width:220, text:'▶ GILIRAN KAMU', fontSize:12, fontFamily:'monospace', fontStyle:'bold', fill:C.green, align:'center' });
+  PZ.pips   = [];
   for (let i = 0; i < 7; i++) {
-    const pip = new Konva.Image({ image: window.IMG['pip_empty'], x: pipStartX + i * pipSpacing - 7, y: pipY, width: 14, height: 14 });
-    L.board.add(pip);
-    RI.pips.push(pip);
+    const pip = new Konva.Circle({ x:cx-42+i*14, y:y+102, radius:5, fill:'#1A2A40', stroke:'#243550', strokeWidth:1 });
+    L.play.add(pip); PZ.pips.push(pip);
+  }
+  [PZ.round, PZ.turns, PZ.actBg, PZ.actTxt].forEach(n => L.play.add(n));
+
+  // Right — my last card
+  const rx = STAGE_W - MINI.w - 20;
+  L.play.add(new Konva.Text({ x:rx, y:y+4, width:MINI.w, text:'KARTU SAYA', fontSize:9, fontFamily:'monospace', fill:'#2A3A50', align:'right' }));
+  PZ.myCard = new Konva.Group({ x:rx, y:y+18 });
+  L.play.add(PZ.myCard);
+
+  L.play.draw();
+}
+
+function updatePlayZone(state, myRole) {
+  const oppRole   = myRole === 'p1' ? 'p2' : 'p1';
+  const isMyTurn  = state.activePlayer === myRole;
+  const isSD      = state.isSuddenDeath;
+
+  PZ.round.text(`RONDE ${state.round}${isSD ? ' ⚡' : ''} / 7`);
+  PZ.round.fill(isSD ? C.red : C.gold);
+  PZ.turns.text(`GILIRAN ${state.turn} / 5`);
+  PZ.actTxt.text(isMyTurn ? '▶ GILIRAN KAMU' : '◀ GILIRAN LAWAN');
+  PZ.actTxt.fill(isMyTurn ? C.green : C.red);
+  PZ.actBg.fill(isMyTurn ? 'rgba(46,204,113,.1)' : 'rgba(231,76,60,.1)');
+  PZ.actBg.stroke(isMyTurn ? '#1A5C38' : '#6B1818');
+
+  PZ.pips.forEach((p, i) => {
+    p.fill(i < state.round-1 ? C.gold : i === state.round-1 ? C.green : '#1A2A40');
+    p.radius(i === state.round-1 ? 7 : 5);
+  });
+
+  // Last played cards
+  const myLastId  = state[myRole  === 'p1' ? 'lastP1Card' : 'lastP2Card'] || null;
+  const oppLastId = state[oppRole === 'p1' ? 'lastP1Card' : 'lastP2Card'] || null;
+  PZ.myCard.destroyChildren();  PZ.myCard.add(makeMiniCard(myLastId));
+  PZ.oppCard.destroyChildren(); PZ.oppCard.add(makeMiniCard(oppLastId));
+
+  L.play.draw();
+}
+
+// ── Action bar ─────────────────────────────────────────────────────────────────
+const AB = {};
+let endTurnBtn=null, activateBtn=null, _endTurnAnim=null;
+
+function buildActionBar() {
+  const { y, h } = LAYOUT.actionBar;
+  L.ui.add(new Konva.Rect({ x:0, y, width:STAGE_W, height:h, fill:'#060E1A', listening:false }));
+
+  AB.strip  = new Konva.Rect({ x:0, y, width:4, height:h, fill:C.gold });
+  AB.myName = new Konva.Text({ x:12, y:y+7,  text:'PLAYER 1', fontSize:13, fontFamily:'monospace', fontStyle:'bold', fill:C.gold });
+  AB.myDeck = new Konva.Text({ x:12, y:y+26, text:'DECK: — | HAND: —', fontSize:10, fontFamily:'monospace', fill:C.muted });
+  AB.efx    = new Konva.Text({ x:200, y:y+4, width:600, height:54, text:'Tidak ada efek aktif',
+    fontSize:9, fontFamily:'monospace', fill:'#1A2A40', wrap:'word' });
+  AB.fpLbl  = new Konva.Text({ x:810, y:y+6,  width:200, text:'FOUL PLAY', fontSize:9, fontFamily:'monospace', fill:'#444', align:'center' });
+  AB.fpName = new Konva.Text({ x:810, y:y+20, width:200, text:'KOSONG',    fontSize:11, fontFamily:'monospace', fontStyle:'bold', fill:'#1E2A38', align:'center' });
+
+  // ACTIVATE FOUL PLAY button (left of end turn, only visible when FP is loaded)
+  const abw = 236, abh = 46;
+  activateBtn = new Konva.Group({ x:782, y:y+8, visible:false });
+  activateBtn.add(new Konva.Rect({ width:abw, height:abh, fill:'#1A0508', stroke:C.red, strokeWidth:2, cornerRadius:3 }));
+  activateBtn.add(new Konva.Text({ width:abw, height:abh, text:'☠  AKTIFKAN FOUL PLAY',
+    fontSize:12, fontFamily:'monospace', fontStyle:'bold', fill:'#FF7070', align:'center', verticalAlign:'middle' }));
+  activateBtn.on('mouseover', () => { document.body.style.cursor='pointer'; activateBtn.getChildren()[0].fill('#2A0810'); L.ui.draw(); });
+  activateBtn.on('mouseout',  () => { document.body.style.cursor='default';  activateBtn.getChildren()[0].fill('#1A0508'); L.ui.draw(); });
+
+  // END TURN button (far right)
+  const bx = 1026, bw = 240, bh = 46;
+  endTurnBtn = new Konva.Group({ x:bx, y:y+8 });
+  endTurnBtn.add(new Konva.Rect({ width:bw, height:bh, fill:'#061A28', stroke:C.blue, strokeWidth:2, cornerRadius:3 }));
+  endTurnBtn.add(new Konva.Text({ width:bw, height:bh, text:'AKHIRI GILIRAN',
+    fontSize:13, fontFamily:'monospace', fontStyle:'bold', fill:C.blue, align:'center', verticalAlign:'middle' }));
+  endTurnBtn.on('mouseover', () => { document.body.style.cursor='pointer'; endTurnBtn.getChildren()[0].fill('#091E2E'); L.ui.draw(); });
+  endTurnBtn.on('mouseout',  () => { document.body.style.cursor='default';  endTurnBtn.getChildren()[0].fill('#061A28'); L.ui.draw(); });
+  endTurnBtn.on('click', () => window.client.endTurn());
+  activateBtn.on('click', () => {
+    const state = window._gameState;
+    const role  = window.client?.playerRole;
+    const fpId  = state?.players?.[role]?.foulPlaySlot;
+    const card  = fpId ? getCardData(fpId) : null;
+    const uses  = state?.players?.[role]?.foulPlayUses || 0;
+    const risk  = [5,15,30,50,75][Math.min(uses, 4)];
+    const warn  = risk >= 50 ? '\n\n⚠ BAHAYA: kamu bisa kalah seketika!' : '';
+    if (confirm(`Aktifkan Foul Play?\n${card ? '"' + card.name + '"' : ''}\n\nRisiko backfire: ${risk}%${warn}`)) {
+      window.client.activateFoulPlay();
+    }
+  });
+
+  [AB.strip, AB.myName, AB.myDeck, AB.efx, AB.fpLbl, AB.fpName, endTurnBtn, activateBtn].forEach(n => L.ui.add(n));
+  L.ui.draw();
+}
+
+function updateActionBar(state, myRole) {
+  const me        = state.players[myRole];
+  const isMyTurn  = state.activePlayer === myRole;
+  const presData  = (window.PRESIDENT_DATA || []).find(p => p.id === me.presidentId);
+  const presCol   = getPresColor(me.presidentId);
+
+  AB.strip.fill(presCol);
+  AB.myName.text((presData ? presData.displayName : 'Player') + (isMyTurn ? '  ← GILIRAN KAMU' : ''));
+  AB.myName.fill(isMyTurn ? C.gold : '#5A6E84');
+  AB.myDeck.text(`DECK: ${(me.deck||[]).length} | HAND: ${(me.hand||[]).length}`);
+
+  // Effects
+  const effs = (me.activeEffects || []).filter(e => (e.durationTurns||0) > 0 || e.type === 'amplify' || e.type === 'shield');
+  if (effs.length) {
+    const parts = effs.slice(0,5).map(e => {
+      const asp = e.target === 'all' ? 'Semua' : e.target;
+      const dur = e.durationTurns > 0 ? ` [${e.durationTurns}×]` : '';
+      if (e.type === 'aura')              return `⏱ ${asp} +${e.delta}/giliran${dur}`;
+      if (e.type === 'amplify')           return `⚡ AKSI berikutnya ×1.5`;
+      if (e.type === 'shield')            return `◯ Blokir negatif${dur}`;
+      if (e.type === 'block_active_play') return `⛔ Tidak bisa AKSI${dur}`;
+      if (e.type === 'block_passive_play')return `⛔ Tidak bisa PASIF${dur}`;
+      return `${e.type}${dur}`;
+    });
+    AB.efx.text('EFEK AKTIF:  ' + parts.join('   '));
+    AB.efx.fill(C.text);
+  } else {
+    AB.efx.text('Tidak ada efek aktif');
+    AB.efx.fill('#1A2A40');
   }
 
-  [RI.round, RI.turn, RI.activeBg, RI.active].forEach(n => L.board.add(n));
-  L.board.draw();
+  // FP slot
+  const fpId     = me.foulPlaySlot;
+  const fpLocked = (me.activeEffects||[]).some(e => e.type==='lock_foulplay_slot' && (e.durationTurns||0)>0);
+  if (fpId) {
+    const fpCard = getCardData(fpId);
+    AB.fpLbl.text(fpLocked ? 'FOUL PLAY [TERKUNCI]' : 'FOUL PLAY — SIAP');
+    AB.fpLbl.fill(fpLocked ? C.red : '#9B59B6');
+    AB.fpName.text(fpCard ? fpCard.name : 'LOADED');
+    AB.fpName.fill(fpLocked ? C.red : '#C39BD3');
+  } else {
+    AB.fpLbl.text('FOUL PLAY');
+    AB.fpLbl.fill('#333');
+    AB.fpName.text('KOSONG');
+    AB.fpName.fill('#1E2838');
+  }
+
+  // End turn button pulse
+  endTurnBtn.listening(isMyTurn);
+  if (isMyTurn && !_endTurnAnim) {
+    _endTurnAnim = new Konva.Animation((f) => {
+      endTurnBtn.opacity(.75 + .25 * Math.abs(Math.sin(f.time * .003)));
+    }, L.ui);
+    _endTurnAnim.start();
+  } else if (!isMyTurn && _endTurnAnim) {
+    _endTurnAnim.stop(); _endTurnAnim = null; endTurnBtn.opacity(.3);
+  }
+
+  activateBtn.visible(isMyTurn && !!fpId && !fpLocked);
+  L.ui.draw();
 }
 
-let _sdBorderAnim = null, _sdBorder = null, _sdLabel = null, _sdOverlay = null;
+// ── News ticker ────────────────────────────────────────────────────────────────
+function buildTicker(headlines) {
+  const { y, h } = LAYOUT.ticker;
+  L.ui.add(new Konva.Rect({ x:0, y, width:STAGE_W, height:h, fill:'#040A12', listening:false }));
+  const dot = new Konva.Circle({ x:14, y:y+h/2, radius:4, fill:C.red });
+  const da  = new Konva.Animation((f) => { dot.opacity(Math.sin(f.time*.004)>0?1:.2); }, L.ui);
+  da.start(); L.ui.add(dot);
+  L.ui.add(new Konva.Text({ x:24, y:y+h/2-5, text:'LIVE', fontSize:8, fontFamily:'monospace', fontStyle:'bold', fill:C.red }));
+  const tick = new Konva.Text({ x:STAGE_W, y:y+h/2-6, text:headlines[0]||'', fontSize:12, fontFamily:'monospace', fill:'#CCCCCC', listening:false });
+  L.ui.add(tick);
+  let idx = 0;
+  const sa = new Konva.Animation(() => {
+    tick.x(tick.x() - 1.6);
+    if (tick.x() < -(tick.width()+60)) { idx=(idx+1)%headlines.length; tick.text(headlines[idx]); tick.x(STAGE_W); }
+  }, L.ui);
+  sa.start();
+}
 
-function updateRoundInfo(state, myRole) {
-  const isMyTurn = state.activePlayer === myRole;
+// ── Sudden death & news flash ──────────────────────────────────────────────────
+function renderEffects(state) {
   const isSD = state.isSuddenDeath;
-  RI.round.text(`ROUND ${state.round}${isSD ? ' ★' : ''} / 7`);
-  RI.turn.text(`TURN ${state.turn} / 5`);
-  RI.active.text(isMyTurn ? 'YOUR TURN' : 'OPPONENT');
-  RI.active.fill(isMyTurn ? '#2ECC71' : '#E74C3C');
-  RI.activeBg.fill(isMyTurn ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.12)');
-  RI.activeBg.stroke(isMyTurn ? '#1A5C38' : '#6B1818');
-  RI.pips.forEach((pip, i) => {
-    const k = i < state.round - 1 ? 'pip_done' : i === state.round - 1 ? 'pip_active' : 'pip_empty';
-    if (window.IMG[k]) pip.image(window.IMG[k]);
-  });
-  L.board.draw();
-
-  // Sudden death: thick pulsing border + dark-red fill overlay + large badge
   if (isSD && !_sdBorder) {
-    _sdOverlay = new Konva.Rect({ x: 0, y: 0, width: STAGE_W, height: STAGE_H, fill: 'rgba(192,0,0,0.04)', listening: false });
-    _sdBorder  = new Konva.Rect({ x: 1, y: 1, width: STAGE_W - 2, height: STAGE_H - 2, stroke: '#E74C3C', strokeWidth: 6, listening: false, cornerRadius: 2 });
-    _sdLabel   = new Konva.Text({
-      x: STAGE_W / 2 - 110, y: LAYOUT.ticker.h + 4, width: 220,
-      text: '⚡ SUDDEN DEATH ⚡', fontSize: 13, fontFamily: 'monospace', fontStyle: 'bold',
-      fill: '#E74C3C', align: 'center', listening: false,
-    });
-    L.effects.add(_sdOverlay);
-    L.effects.add(_sdBorder);
-    L.effects.add(_sdLabel);
-    _sdBorderAnim = new Konva.Animation((frame) => {
-      const pulse = 0.35 + 0.65 * Math.abs(Math.sin(frame.time * 0.0025));
-      _sdBorder.opacity(pulse);
-      _sdLabel.opacity(pulse);
-      _sdOverlay.opacity(pulse * 0.5);
+    _sdOverlay = new Konva.Rect({ x:0,y:0,width:STAGE_W,height:STAGE_H,fill:'rgba(192,0,0,.03)',listening:false });
+    _sdBorder  = new Konva.Rect({ x:1,y:1,width:STAGE_W-2,height:STAGE_H-2,stroke:C.red,strokeWidth:6,listening:false,cornerRadius:2 });
+    _sdLabel   = new Konva.Text({ x:STAGE_W/2-130, y:LAYOUT.ticker.h+6, width:260,
+      text:'⚡ SUDDEN DEATH ⚡', fontSize:14, fontFamily:'monospace', fontStyle:'bold', fill:C.red, align:'center', listening:false });
+    [_sdOverlay, _sdBorder, _sdLabel].forEach(n => L.effects.add(n));
+    _sdBorderAnim = new Konva.Animation((f) => {
+      const p = .35 + .65 * Math.abs(Math.sin(f.time*.0025));
+      _sdBorder.opacity(p); _sdLabel.opacity(p); _sdOverlay.opacity(p*.4);
     }, L.effects);
     _sdBorderAnim.start();
   } else if (!isSD && _sdBorder) {
-    if (_sdBorderAnim) { _sdBorderAnim.stop(); _sdBorderAnim = null; }
-    _sdBorder.destroy(); _sdBorder = null;
-    if (_sdLabel)   { _sdLabel.destroy();   _sdLabel   = null; }
-    if (_sdOverlay) { _sdOverlay.destroy(); _sdOverlay = null; }
-    L.effects.draw();
-  }
-
-  // News event flash — highlight the affected aspect row briefly
-  if (state.lastNewsEvent && state.lastNewsEvent !== window._lastNewsEventShown) {
-    window._lastNewsEventShown = state.lastNewsEvent;
-    flashNewsAspect(state.lastNewsEvent);
+    if (_sdBorderAnim) { _sdBorderAnim.stop(); _sdBorderAnim=null; }
+    [_sdBorder, _sdLabel, _sdOverlay].forEach(n => { if(n) n.destroy(); });
+    _sdBorder=_sdLabel=_sdOverlay=null; L.effects.draw();
   }
 }
 
-let _newsFlashAnim = null;
+let _newsFlashAnim=null;
 function flashNewsAspect(evt) {
-  if (_newsFlashAnim) { _newsFlashAnim.stop(); }
-  const { x, y } = LAYOUT.aspects;
-  const rowH = 48;
-  const aspIdx = ASPECTS.indexOf(evt.aspect);
-  if (aspIdx < 0) return;
-
-  const ry = y + aspIdx * rowH;
-  const arrow = evt.direction === 'up' ? '▲' : '▼';
-  const col   = evt.direction === 'up' ? '#F39C12' : '#E74C3C';
-
-  const flash = new Konva.Group();
-  flash.add(new Konva.Rect({ x: x, y: ry, width: LAYOUT.aspects.w, height: rowH - 2, fill: col, opacity: 0.18, cornerRadius: 2 }));
-  flash.add(new Konva.Text({
-    x: x + LAYOUT.aspects.w / 2 - 60, y: ry + 14, width: 120,
-    text: `${arrow} ${evt.aspect} weight`, fontSize: 10, fontFamily: 'monospace',
-    fill: col, align: 'center', fontStyle: 'bold',
-  }));
-  L.effects.add(flash);
-  L.effects.draw();
-
+  if (_newsFlashAnim) _newsFlashAnim.stop();
+  const idx = ASPECTS.indexOf(evt.aspect);
+  if (idx < 0) return;
+  const cx  = idx * COL_W;
+  const col = evt.direction === 'up' ? C.orange : C.red;
+  const fl  = new Konva.Group({ listening:false });
+  fl.add(new Konva.Rect({ x:cx+2, y:LAYOUT.aspects.y, width:COL_W-4, height:LAYOUT.aspects.h, fill:col, opacity:.15, cornerRadius:2 }));
+  L.effects.add(fl); L.effects.draw();
   const t0 = Date.now();
   _newsFlashAnim = new Konva.Animation(() => {
-    const elapsed = Date.now() - t0;
-    if (elapsed > 2800) { flash.destroy(); L.effects.draw(); _newsFlashAnim.stop(); return; }
-    flash.opacity(elapsed < 2200 ? 1 : 1 - (elapsed - 2200) / 600);
-    L.effects.draw();
+    const e = Date.now()-t0;
+    if (e > 2800) { fl.destroy(); L.effects.draw(); _newsFlashAnim.stop(); return; }
+    fl.opacity(e < 2200 ? 1 : 1-(e-2200)/600);
   }, L.effects);
   _newsFlashAnim.start();
 }
 
-// ── Player label panels ────────────────────────────────────────────────────
-
-const playerLabels = { p1: null, p2: null, p1strip: null, p2strip: null };
-
-function buildPlayerLabels() {
-  // President accent color strips
-  playerLabels.p2strip = new Konva.Rect({ x: 0, y: 40, width: 260, height: 3, fill: '#333', listening: false });
-  playerLabels.p1strip = new Konva.Rect({ x: 0, y: 458, width: 260, height: 3, fill: '#333', listening: false });
-  // Labels
-  playerLabels.p2 = new Konva.Text({ x: 0, y: 44, width: 260, text: 'P2', fontSize: 11, fontFamily: 'monospace', fill: '#888', align: 'center' });
-  playerLabels.p1 = new Konva.Text({ x: 0, y: 462, width: 260, text: 'P1', fontSize: 11, fontFamily: 'monospace', fill: '#888', align: 'center' });
-  L.board.add(playerLabels.p2strip);
-  L.board.add(playerLabels.p1strip);
-  L.board.add(playerLabels.p1);
-  L.board.add(playerLabels.p2);
-  L.board.draw();
-}
-
-function updatePlayerLabels(state, myRole) {
-  const presData = window.PRESIDENT_DATA || [];
-  const p1Pres = presData.find(p => p.id === state.players.p1.presidentId);
-  const p2Pres = presData.find(p => p.id === state.players.p2.presidentId);
-  const p1Color = PRES_GLOW_COLOR[state.players.p1.presidentId] || '#FFD700';
-  const p2Color = PRES_GLOW_COLOR[state.players.p2.presidentId] || '#FFD700';
-  const p1IsMe = myRole === 'p1';
-  const p2IsMe = myRole === 'p2';
-
-  playerLabels.p1strip.fill(p1Color);
-  playerLabels.p2strip.fill(p2Color);
-  playerLabels.p1.text(`P1: ${p1Pres ? p1Pres.displayName : 'Player 1'}${p1IsMe ? ' ◀ YOU' : ''}`);
-  playerLabels.p2.text(`P2: ${p2Pres ? p2Pres.displayName : 'Player 2'}${p2IsMe ? ' ◀ YOU' : ''}`);
-  playerLabels.p1.fill(p1IsMe ? '#FFD700' : '#888');
-  playerLabels.p2.fill(p2IsMe ? '#FFD700' : '#888');
-  L.board.draw();
-}
-
-// ── Buttons ────────────────────────────────────────────────────────────────
-
-function makeButton(label, x, y, w, h, style, onClick) {
-  const g = new Konva.Group({ x, y });
-  const normalKey = style === 'danger' ? 'btn_danger' : 'btn_normal';
-  const hoverKey  = style === 'danger' ? 'btn_danger' : 'btn_hover';
-
-  const bg = new Konva.Image({ image: window.IMG[normalKey], width: w, height: h });
-  if (!window.IMG[normalKey]) {
-    const fallback = new Konva.Rect({ width: w, height: h, fill: style === 'danger' ? '#5C0000' : '#1A1A2E', stroke: style === 'danger' ? '#E74C3C' : '#FFD700', strokeWidth: 1, cornerRadius: 3 });
-    g.add(fallback);
-  } else {
-    g.add(bg);
-  }
-  g.add(new Konva.Text({
-    width: w, height: h, text: label,
-    fontSize: 9, fontFamily: 'monospace', fontStyle: 'bold',
-    fill: style === 'danger' ? '#FF6B6B' : '#FFD700', align: 'center', verticalAlign: 'middle',
-  }));
-
-  g.on('mouseover', () => { document.body.style.cursor = 'pointer'; if (window.IMG[hoverKey]) bg.image(window.IMG[hoverKey]); L.ui.draw(); });
-  g.on('mouseout',  () => { document.body.style.cursor = 'default'; if (window.IMG[normalKey]) bg.image(window.IMG[normalKey]); L.ui.draw(); });
-  g.on('click', onClick);
-  return g;
-}
-
-let endTurnBtn = null, activateBtn = null, _endTurnAnim = null;
-
-function buildActionButtons() {
-  endTurnBtn = makeButton('END TURN', LAYOUT.endturn.x, LAYOUT.endturn.y, LAYOUT.endturn.w, LAYOUT.endturn.h, 'normal', () => window.client.endTurn());
-  L.ui.add(endTurnBtn);
-
-  activateBtn = makeButton('ACTIVATE FOUL PLAY', LAYOUT.activate.x, LAYOUT.activate.y, LAYOUT.activate.w, LAYOUT.activate.h, 'danger', () => {
-    const state = window._gameState;
-    const myRole = window.client?.playerRole;
-    const fpSlotId = state?.players?.[myRole]?.foulPlaySlot;
-    const card = fpSlotId ? getCardData(fpSlotId) : null;
-    const risk = getRiskPercent();
-    const cardLine = card ? `\n${card.name}\n"${card.description}"\n` : '';
-    const warnLine = risk >= 50 ? '\n⚠ BAHAYA: Kamu bisa kalah seketika!' : '';
-    if (confirm(`AKTIFKAN FOUL PLAY?${cardLine}\nRisiko backfire: ${risk}%${warnLine}`)) {
-      window.client.activateFoulPlay();
-    }
-  });
-  activateBtn.visible(false);
-  L.ui.add(activateBtn);
-  L.ui.draw();
-}
-
-function updateActionButtons(state, myRole) {
-  const isMyTurn = state.activePlayer === myRole;
-  endTurnBtn.listening(isMyTurn);
-
-  if (isMyTurn && !_endTurnAnim) {
-    // Pulse the end-turn button when it's the player's turn
-    _endTurnAnim = new Konva.Animation((frame) => {
-      endTurnBtn.opacity(0.7 + 0.3 * Math.abs(Math.sin(frame.time * 0.003)));
-    }, L.ui);
-    _endTurnAnim.start();
-  } else if (!isMyTurn && _endTurnAnim) {
-    _endTurnAnim.stop();
-    _endTurnAnim = null;
-    endTurnBtn.opacity(0.4);
-  }
-
-  const myPlayer = state.players[myRole];
-  const fpLocked = myPlayer?.activeEffects?.some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
-  activateBtn.visible(isMyTurn && !!myPlayer?.foulPlaySlot && !fpLocked);
-  L.ui.draw();
-}
-
-// ── News ticker ────────────────────────────────────────────────────────────
-
-function buildTicker(headlines) {
-  L.ui.add(new Konva.Rect({ x: 0, y: 0, width: STAGE_W, height: LAYOUT.ticker.h, fill: '#050510', stroke: '#1A1A3A', strokeWidth: 1 }));
-
-  const dot = new Konva.Circle({ x: 18, y: 18, radius: 5, fill: '#E74C3C' });
-  L.ui.add(dot);
-  const dotAnim = new Konva.Animation((frame) => { dot.opacity(Math.sin(frame.time * 0.004) > 0 ? 1 : 0); }, L.ui);
-  dotAnim.start();
-
-  L.ui.add(new Konva.Text({ x: 28, y: 11, text: 'LIVE', fontSize: 9, fontFamily: 'monospace', fontStyle: 'bold', fill: '#E74C3C' }));
-
-  const tickerText = new Konva.Text({ x: STAGE_W, y: 10, text: headlines[0] || '', fontSize: 13, fontFamily: 'monospace', fill: '#EEEEEE', listening: false });
-  L.ui.add(tickerText);
-
-  let idx = 0;
-  const scrollAnim = new Konva.Animation(() => {
-    tickerText.x(tickerText.x() - 1.5);
-    if (tickerText.x() < -(tickerText.width() + 60)) {
-      idx = (idx + 1) % headlines.length;
-      tickerText.text(headlines[idx]);
-      tickerText.x(STAGE_W);
-    }
-  }, L.ui);
-  scrollAnim.start();
-}
-
-// ── Active effects ─────────────────────────────────────────────────────────
-
-function renderEffects(state, myRole) {
-  // Only destroy the effects-list group, not SD border / news flash
-  const prev = L.effects.findOne('#fx-list');
-  if (prev) prev.destroy();
-
-  const opp = myRole === 'p1' ? 'p2' : 'p1';
-  const myEff  = state.players[myRole]?.activeEffects || [];
-  const oppEff = state.players[opp]?.activeEffects || [];
-  const g = new Konva.Group({ id: 'fx-list' });
-
-  function renderList(effects, startX, startY, label) {
-    g.add(new Konva.Text({ x: startX, y: startY, text: label, fontSize: 8, fontFamily: 'monospace', fill: '#555' }));
-    effects.slice(0, 4).forEach((e, i) => {
-      const chipFill   = e.delta > 0 ? 'rgba(46,204,113,0.12)' : e.delta < 0 ? 'rgba(231,76,60,0.12)' : 'rgba(41,128,185,0.10)';
-      const chipStroke = e.delta > 0 ? '#1A5C38'               : e.delta < 0 ? '#6B1818'               : '#1A3050';
-      const textFill   = e.delta > 0 ? '#2ECC71'               : e.delta < 0 ? '#E74C3C'               : '#5DADE2';
-      g.add(new Konva.Rect({ x: startX, y: startY + 12 + i * 20, width: 230, height: 16, fill: chipFill, stroke: chipStroke, strokeWidth: 1, cornerRadius: 3 }));
-      g.add(new Konva.Text({
-        x: startX + 4, y: startY + 15 + i * 20, width: 222,
-        text: `${e.sourceCard || e.type} [${e.durationTurns ?? '∞'}t]`,
-        fontSize: 8, fontFamily: 'monospace', fill: textFill, ellipsis: true,
-      }));
-    });
-  }
-
-  const cx = LAYOUT.center.x + 10;
-  renderList(myEff,  cx, LAYOUT.center.y + 330, 'MY EFFECTS');
-  renderList(oppEff, cx, LAYOUT.center.y + 460, 'OPP EFFECTS');
-  L.effects.add(g);
-  L.effects.draw();
-}
-
-// ── Peek notification ──────────────────────────────────────────────────────
-
+// ── Peek notification ──────────────────────────────────────────────────────────
 function showPeek(cards) {
-  const names = cards.map(c => c?.name || c?.id || '?').join(', ');
-  const box = new Konva.Group();
-  box.add(new Konva.Rect({ x: STAGE_W / 2 - 200, y: 42, width: 400, height: 46, fill: '#0D2144', stroke: '#2980B9', strokeWidth: 2, cornerRadius: 6 }));
-  box.add(new Konva.Text({ x: STAGE_W / 2 - 200, y: 52, width: 400, text: `BLUSUKAN: ${names}`, fontSize: 11, fontFamily: 'monospace', fill: '#5DADE2', align: 'center' }));
-  L.ui.add(box);
-  L.ui.draw();
-  setTimeout(() => { box.destroy(); L.ui.draw(); }, 4000);
+  const names = cards.map(c => c?.name || '?').join(', ');
+  showToast(`BLUSUKAN: Melihat kartu lawan — ${names}`, 'info');
 }
 
-// ── Log ───────────────────────────────────────────────────────────────────
-
+// ── Log (console only in new UI) ───────────────────────────────────────────────
 const logEntries = [];
-const LOG_MAX = 8;
-let logGroup = null;
-
-function buildLog() {
-  const lx = LAYOUT.center.x + 10, ly = LAYOUT.center.y + 554;
-  logGroup = new Konva.Group({ x: lx, y: ly });
-  L.ui.add(logGroup);
-}
-
 function appendLog(msg) {
   logEntries.push(msg);
-  if (logEntries.length > LOG_MAX) logEntries.shift();
-  if (!logGroup) return; // board not ready yet; entry is buffered in logEntries
-  logGroup.destroyChildren();
-  logEntries.forEach((entry, i) => {
-    const isLatest = i === logEntries.length - 1;
-    logGroup.add(new Konva.Text({
-      x: 0, y: i * 15, width: 740, text: entry,
-      fontSize: 9, fontFamily: 'monospace',
-      fill: isLatest ? '#FFD700' : '#555',
-      fontStyle: isLatest ? 'bold' : 'normal',
-      ellipsis: true,
-    }));
-  });
-  L.ui.draw();
+  if (logEntries.length > 10) logEntries.shift();
+  console.log('[LOG]', msg);
 }
+function _flushLog() {}
 
-function _flushLog() {
-  if (!logGroup || logEntries.length === 0) return;
-  logGroup.destroyChildren();
-  logEntries.forEach((entry, i) => {
-    const isLatest = i === logEntries.length - 1;
-    logGroup.add(new Konva.Text({
-      x: 0, y: i * 15, width: 740, text: entry,
-      fontSize: 9, fontFamily: 'monospace',
-      fill: isLatest ? '#FFD700' : '#555',
-      fontStyle: isLatest ? 'bold' : 'normal',
-      ellipsis: true,
-    }));
-  });
-  L.ui.draw();
-}
-
-// ── Disconnect overlay ─────────────────────────────────────────────────────
-
+// ── Disconnect overlay ─────────────────────────────────────────────────────────
 let disconnectOverlay = null;
-
-function showDisconnect(playerRole) {
+function showDisconnect(role) {
   if (disconnectOverlay) disconnectOverlay.destroy();
   disconnectOverlay = new Konva.Group();
-  disconnectOverlay.add(new Konva.Rect({ x: 0, y: 0, width: STAGE_W, height: STAGE_H, fill: 'rgba(0,0,0,0.65)' }));
-  disconnectOverlay.add(new Konva.Text({
-    x: 0, y: STAGE_H / 2 - 30, width: STAGE_W,
-    text: `${playerRole.toUpperCase()} disconnected\nWaiting for reconnect...`,
-    fontSize: 20, fontFamily: 'monospace', fill: '#E74C3C', align: 'center',
-  }));
-  L.ui.add(disconnectOverlay);
-  L.ui.draw();
+  disconnectOverlay.add(new Konva.Rect({ x:0,y:0,width:STAGE_W,height:STAGE_H,fill:'rgba(0,0,0,.75)' }));
+  disconnectOverlay.add(new Konva.Text({ x:0,y:STAGE_H/2-40,width:STAGE_W,
+    text:(role==='p1'?'Player 1':'Player 2')+' terputus dari server',
+    fontSize:22,fontFamily:'monospace',fontStyle:'bold',fill:C.red,align:'center' }));
+  disconnectOverlay.add(new Konva.Text({ x:0,y:STAGE_H/2+4,width:STAGE_W,
+    text:'Menunggu sambungan kembali…',
+    fontSize:14,fontFamily:'monospace',fill:C.muted,align:'center' }));
+  L.ui.add(disconnectOverlay); L.ui.draw();
 }
-
 function clearDisconnect() {
-  if (disconnectOverlay) { disconnectOverlay.destroy(); disconnectOverlay = null; L.ui.draw(); }
+  if (disconnectOverlay) { disconnectOverlay.destroy(); disconnectOverlay=null; L.ui.draw(); }
 }
 
-// ── End screen ─────────────────────────────────────────────────────────────
-
+// ── End screen ─────────────────────────────────────────────────────────────────
 function showEndScreen(data) {
   const myRole = window.client.playerRole;
   const { finalScores, aspectWeights } = data;
+  const myScore  = (finalScores?.[myRole+'Score'] ?? 0).toFixed(2);
+  const oppScore = (finalScores?.[(myRole==='p1'?'p2':'p1')+'Score'] ?? 0).toFixed(2);
+  const isWin    = finalScores?.winner === myRole;
 
-  const overlay = new Konva.Rect({ x: 0, y: 0, width: STAGE_W, height: STAGE_H, fill: 'rgba(0,0,0,0)' });
-  L.ui.add(overlay);
-  overlay.to({ fill: 'rgba(0,0,0,0.88)', duration: 0.5 });
+  const overlay = new Konva.Rect({ x:0,y:0,width:STAGE_W,height:STAGE_H,fill:'rgba(0,0,0,0)' });
+  L.ui.add(overlay); overlay.to({ fill:'rgba(0,0,0,.9)', duration:.5 });
 
-  const panel = new Konva.Group({ opacity: 0 });
-  const px = STAGE_W / 2 - 300, py = 50;
-  panel.add(new Konva.Rect({ x: px, y: py, width: 600, height: 610, fill: '#0A0A1A', stroke: '#FFD700', strokeWidth: 2, cornerRadius: 8 }));
-  panel.add(new Konva.Text({ x: px, y: py + 16, width: 600, text: 'HASIL PEMILU', fontSize: 22, fontFamily: 'monospace', fontStyle: 'bold', fill: '#FFD700', align: 'center' }));
-  L.ui.add(panel);
-  panel.to({ opacity: 1, duration: 0.4 });
+  const pw=680, ph=Math.min(620, 80 + Object.keys(aspectWeights||{}).length*80 + 100);
+  const px=(STAGE_W-pw)/2, py=Math.max(20,(STAGE_H-ph)/2);
+  const panel = new Konva.Group({ opacity:0 });
+  panel.add(new Konva.Rect({ x:px,y:py,width:pw,height:ph,fill:'#070D18',stroke:C.gold,strokeWidth:2,cornerRadius:6 }));
+  panel.add(new Konva.Text({ x:px,y:py+16,width:pw,text:'HASIL PEMILU',
+    fontSize:26,fontFamily:'monospace',fontStyle:'bold',fill:C.gold,align:'center' }));
+  panel.add(new Konva.Text({ x:px,y:py+46,width:pw,text:'Perolehan Suara Berdasarkan Aspek',
+    fontSize:11,fontFamily:'monospace',fill:C.muted,align:'center' }));
+  L.ui.add(panel); panel.to({ opacity:1, duration:.4 });
 
-  // Reveal each aspect weight with a delay
-  const aspKeys = Object.keys(aspectWeights || {});
-  const shuffled = aspKeys.slice().sort(() => Math.random() - 0.5);
-  let delay = 400;
-
-  shuffled.forEach((asp, i) => {
+  const aspKeys = Object.keys(aspectWeights||{});
+  aspKeys.forEach((asp, i) => {
     setTimeout(() => {
-      const w = (aspectWeights[asp] || 0).toFixed(0);
-      const p1s = (data.players?.p1?.aspects?.[asp] || 0).toFixed(1);
-      const p2s = (data.players?.p2?.aspects?.[asp] || 0).toFixed(1);
-      const p1c = (data.players?.p1?.aspects?.[asp] * aspectWeights[asp] / 100).toFixed(1);
-      const p2c = (data.players?.p2?.aspects?.[asp] * aspectWeights[asp] / 100).toFixed(1);
-      const ry = py + 60 + i * 82;
-
-      const row = new Konva.Group({ opacity: 0 });
-      const aspImg = window.IMG[ASP_ICON[asp]];
-      if (aspImg) row.add(new Konva.Image({ image: aspImg, x: px + 20, y: ry, width: 20, height: 20 }));
-      row.add(new Konva.Text({ x: px + 48, y: ry + 3, text: asp, fontSize: 13, fontFamily: 'monospace', fill: '#FFF' }));
-      row.add(new Konva.Text({ x: px + 48, y: ry + 20, text: `Weight: ${w}%`, fontSize: 11, fontFamily: 'monospace', fill: '#FFD700' }));
-      row.add(new Konva.Text({ x: px + 300, y: ry + 3, text: `P2: ${p2s} → +${p2c}`, fontSize: 11, fontFamily: 'monospace', fill: '#AAA' }));
-      row.add(new Konva.Text({ x: px + 300, y: ry + 20, text: `P1: ${p1s} → +${p1c}`, fontSize: 11, fontFamily: 'monospace', fill: '#CCC' }));
-      row.add(new Konva.Line({ points: [px + 16, ry + 36, px + 584, ry + 36], stroke: '#1A1A2E', strokeWidth: 1 }));
-
-      panel.add(row);
-      row.to({ opacity: 1, duration: 0.25 });
-      L.ui.draw();
-    }, delay * (i + 1));
+      const w  = (aspectWeights[asp]||0).toFixed(0);
+      const mys = parseFloat(myRole==='p1' ? (data.players?.p1?.aspects?.[asp]||0) : (data.players?.p2?.aspects?.[asp]||0));
+      const ops = parseFloat(myRole==='p1' ? (data.players?.p2?.aspects?.[asp]||0) : (data.players?.p1?.aspects?.[asp]||0));
+      const ry  = py+70 + i*82;
+      const row = new Konva.Group({ opacity:0 });
+      row.add(new Konva.Rect({ x:px+12,y:ry,width:pw-24,height:76,fill:'rgba(255,255,255,.02)',cornerRadius:3 }));
+      row.add(new Konva.Text({ x:px+22,y:ry+10,text:`${ASP_SYMBOL[asp]}  ${asp}`,fontSize:14,fontFamily:'monospace',fill:C.text }));
+      row.add(new Konva.Text({ x:px+22,y:ry+30,text:`Bobot: ${w}%`,fontSize:11,fontFamily:'monospace',fill:C.gold }));
+      row.add(new Konva.Text({ x:px+pw-240,y:ry+10,width:214,text:`Lawan:  ${ops.toFixed(0)} poin`,fontSize:11,fontFamily:'monospace',fill:'#778899',align:'right' }));
+      row.add(new Konva.Text({ x:px+pw-240,y:ry+30,width:214,text:`Kamu:   ${mys.toFixed(0)} poin`,fontSize:11,fontFamily:'monospace',fill:C.text,align:'right' }));
+      const bx=px+22, bw=pw-44;
+      row.add(new Konva.Rect({ x:bx,y:ry+54,width:bw,height:8,fill:'#0A1520',cornerRadius:2 }));
+      row.add(new Konva.Rect({ x:bx,y:ry+54,width:Math.max(3,bw*(mys/100)),height:8,fill:healthColor(mys),cornerRadius:2 }));
+      panel.add(row); row.to({ opacity:1, duration:.2 }); L.ui.draw();
+    }, 350*(i+1));
   });
 
-  // Final scores
   setTimeout(() => {
-    const winner = finalScores?.winner;
-    const isWinner = winner === myRole;
-    const myScore = (finalScores?.[myRole + 'Score'] ?? 0).toFixed(2);
-    const oppScore = (finalScores?.[(myRole === 'p1' ? 'p2' : 'p1') + 'Score'] ?? 0).toFixed(2);
-
-    const box = new Konva.Group({ opacity: 0 });
-    box.add(new Konva.Rect({ x: px + 16, y: py + 536, width: 568, height: 56, fill: isWinner ? '#0D3B0D' : '#3B0D0D', stroke: isWinner ? '#2ECC71' : '#E74C3C', strokeWidth: 2, cornerRadius: 4 }));
-    box.add(new Konva.Text({
-      x: px + 16, y: py + 550, width: 568,
-      text: isWinner ? `✓ MENANG!  Skor: ${myScore} vs ${oppScore}` : `✗ KALAH  Skor: ${myScore} vs ${oppScore}`,
-      fontSize: 16, fontFamily: 'monospace', fontStyle: 'bold',
-      fill: isWinner ? '#2ECC71' : '#E74C3C', align: 'center',
-    }));
-    panel.add(box);
-    box.to({ opacity: 1, duration: 0.3 });
-
+    const rb = new Konva.Group({ opacity:0 });
+    const ry = py + ph - 78;
+    rb.add(new Konva.Rect({ x:px+16,y:ry,width:pw-32,height:58, fill:isWin?'#091A09':'#1A0909', stroke:isWin?C.green:C.red, strokeWidth:2, cornerRadius:4 }));
+    rb.add(new Konva.Text({ x:px+16,y:ry+8,width:pw-32,
+      text:isWin?'✓  MENANG!':'✗  KALAH', fontSize:24,fontFamily:'monospace',fontStyle:'bold',
+      fill:isWin?C.green:C.red, align:'center' }));
+    rb.add(new Konva.Text({ x:px+16,y:ry+38,width:pw-32,
+      text:`Skor: ${myScore}  vs  ${oppScore}`,
+      fontSize:12,fontFamily:'monospace',fill:isWin?'#27AE60':'#C0392B',align:'center' }));
+    panel.add(rb); rb.to({ opacity:1, duration:.3 });
     if (myRole === 'p1') {
-      const replayBtn = makeButton('PLAY AGAIN', STAGE_W / 2 - 70, py + 620, 140, 36, 'normal', () => { window.client.resetRoom(); window.location.href = '/'; });
-      panel.add(replayBtn);
-    } else {
-      panel.add(new Konva.Text({
-        x: px + 16, y: py + 626, width: 568,
-        text: 'Menunggu P1 untuk memulai ulang permainan...',
-        fontSize: 12, fontFamily: 'monospace', fill: '#666', align: 'center',
-      }));
+      const btn = new Konva.Group({ x:STAGE_W/2-100, y:py+ph+10 });
+      btn.add(new Konva.Rect({ width:200,height:42,fill:'#050E1F',stroke:C.blue,strokeWidth:2,cornerRadius:3 }));
+      btn.add(new Konva.Text({ width:200,height:42,text:'MAIN LAGI',fontSize:14,fontFamily:'monospace',fontStyle:'bold',fill:C.blue,align:'center',verticalAlign:'middle' }));
+      btn.on('click', () => { window.client.resetRoom(); window.location.href='/'; });
+      btn.on('mouseover', () => { document.body.style.cursor='pointer'; L.ui.draw(); });
+      btn.on('mouseout',  () => { document.body.style.cursor='default';  L.ui.draw(); });
+      panel.add(btn);
     }
     L.ui.draw();
-  }, delay * (shuffled.length + 1) + 600);
+  }, 350*(aspKeys.length+1)+500);
 }
 
-// ── Main full render ───────────────────────────────────────────────────────
-
+// ── Full render ─────────────────────────────────────────────────────────────────
 function fullRender(state) {
   window._gameState = state;
-  const myRole = window.client?.playerRole || 'p1';
+  const myRole   = window.client?.playerRole || 'p1';
   const isMyTurn = state.activePlayer === myRole;
   const myPlayer = state.players[myRole];
-  const oppRole = myRole === 'p1' ? 'p2' : 'p1';
+  const oppRole  = myRole === 'p1' ? 'p2' : 'p1';
   const oppPlayer = state.players[oppRole];
 
   updateAspectScores(state);
-  updateRoundInfo(state, myRole);
-  updateActionButtons(state, myRole);
-  updatePlayerLabels(state, myRole);
-  updateDeckCounters(state);
-  renderEffects(state, myRole);
+  updatePlayZone(state, myRole);
+  updateOppBar(state, myRole);
+  updateActionBar(state, myRole);
+  renderEffects(state);
 
-  // Determine which card types are locked for me this turn
   const myLockedTypes = [];
   if (isMyTurn) {
-    if ((myPlayer.activeEffects || []).some(e => e.type === 'block_active_play'  && (e.durationTurns || 0) > 0)) myLockedTypes.push('active');
-    if ((myPlayer.activeEffects || []).some(e => e.type === 'block_passive_play' && (e.durationTurns || 0) > 0)) myLockedTypes.push('passive');
+    if ((myPlayer.activeEffects||[]).some(e => e.type==='block_active_play'  && (e.durationTurns||0)>0)) myLockedTypes.push('active');
+    if ((myPlayer.activeEffects||[]).some(e => e.type==='block_passive_play' && (e.durationTurns||0)>0)) myLockedTypes.push('passive');
   }
 
-  // My hand (face up, interactive on my turn)
-  const myHandData = (myPlayer.hand || []).map(getCardData).filter(Boolean);
-  renderHand(myHandData, LAYOUT.p1hand, true, isMyTurn, myLockedTypes);
+  const myHandData  = (myPlayer.hand||[]).map(getCardData).filter(Boolean);
+  renderHand(myHandData, LAYOUT.myHand, true, isMyTurn, myLockedTypes, state.cardPlayedThisTurn);
 
-  // Opponent's hand (face down, but face-up if handRevealed)
-  const oppHandCount = (oppPlayer.hand || []).length;
   if (oppPlayer.handRevealed) {
-    const oppHandData = (oppPlayer.hand || []).map(getCardData).filter(Boolean);
-    renderHand(oppHandData, LAYOUT.p2hand, true, false, []);
+    const oppHandData = (oppPlayer.hand||[]).map(getCardData).filter(Boolean);
+    renderHand(oppHandData, LAYOUT.oppHand, true, false, []);
   } else {
-    renderHand(oppHandCount, LAYOUT.p2hand, false, false, []);
+    renderHand((oppPlayer.hand||[]).length, LAYOUT.oppHand, false, false, []);
   }
 
-  // FP slots — show lock status
-  const myFPLocked  = (myPlayer.activeEffects  || []).some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
-  const oppFPLocked = (oppPlayer.activeEffects || []).some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
-  L.play.destroyChildren();
-  const myFP  = makeFoulPlaySlot(LAYOUT.p1fp, 'MY FOUL PLAY',  !!myPlayer.foulPlaySlot,  myFPLocked, myPlayer.foulPlaySlot);
-  const oppFP = makeFoulPlaySlot(LAYOUT.p2fp, 'OPP FOUL PLAY', !!oppPlayer.foulPlaySlot, oppFPLocked, null);
-  L.play.add(myFP);
-  L.play.add(oppFP);
-  L.play.draw();
+  if (state.lastNewsEvent && state.lastNewsEvent !== window._lastNewsEventShown) {
+    window._lastNewsEventShown = state.lastNewsEvent;
+    flashNewsAspect(state.lastNewsEvent);
+  }
 
   clearDisconnect();
 }
 
-// ── Board init ─────────────────────────────────────────────────────────────
-
+// ── Board init ─────────────────────────────────────────────────────────────────
 function initBoard() {
   drawBackground();
+  buildOppBar();
   buildAspectTable();
-  buildDeckCounters();
-  buildRoundInfo();
-  buildPlayerLabels();
-  buildActionButtons();
-  buildLog();
-  buildTicker(window.HEADLINES || ['Democracy The Game — Live News Ticker']);
-  L.board.draw();
-  L.ui.draw();
-  console.log('[Konva] Board ready');
+  buildPlayZone();
+  buildActionBar();
+  buildTicker(window.HEADLINES || ['Democracy The Game']);
+  console.log('[Konva] Board ready v2');
 }
 
-// ── Board-ready gate ───────────────────────────────────────────────────────
-// session_restored / game_start arrive before initBoard() completes because
-// the socket reconnects faster than preloadAll finishes. Queue state here
-// and apply it once the board is built.
-
-let _boardReady = false;
-let _pendingRender = null;
+// ── Board-ready gate ───────────────────────────────────────────────────────────
+let _boardReady = false, _pendingRender = null;
 
 function _applyPending() {
   if (!_pendingRender) return;
-  const { state, logs } = _pendingRender;
-  _pendingRender = null;
+  const { state, logs } = _pendingRender; _pendingRender = null;
   logs.forEach(m => appendLog(m));
   if (state) fullRender(state);
 }
 
-// ── Socket event wiring ────────────────────────────────────────────────────
-
+// ── Socket event wiring ────────────────────────────────────────────────────────
 window.client.on('session_restored', ({ playerRole, state }) => {
   if (!state) return;
-  const logs = [`↩ Session restored as ${playerRole}`];
+  const logs = [`↩ Sesi dipulihkan sebagai ${playerRole}`];
   if (!_boardReady) { _pendingRender = { state, logs }; return; }
-  fullRender(state);
-  logs.forEach(m => appendLog(m));
+  fullRender(state); logs.forEach(m => appendLog(m));
 });
 
 window.client.on('game_start', ({ state }) => {
   const logs = ['Permainan dimulai!'];
   if (!_boardReady) { _pendingRender = { state, logs }; return; }
-  fullRender(state);
-  logs.forEach(m => appendLog(m));
+  fullRender(state); logs.forEach(m => appendLog(m));
 });
 
 window.client.on('state_update', ({ state, logEntry }) => {
   fullRender(state);
   if (logEntry) appendLog(logEntry);
-  const latest = state.newsLog?.[state.newsLog.length - 1];
-  if (latest && latest !== window._lastNewsLog) {
-    window._lastNewsLog = latest;
-    appendLog('📰 ' + latest);
-  }
+  const latest = state.newsLog?.[state.newsLog.length-1];
+  if (latest && latest !== window._lastNewsLog) { window._lastNewsLog=latest; appendLog('📰 '+latest); }
 });
 
 window.client.on('peek_result', ({ cards }) => showPeek(cards));
 
 window.client.on('game_over', (data) => {
   showEndScreen(data);
-  appendLog(`GAME OVER — winner: ${data.finalScores?.winner || 'tie'}`);
+  appendLog(`Permainan selesai — pemenang: ${data.finalScores?.winner || 'seri'}`);
 });
 
 window.client.on('player_disconnected', ({ playerRole }) => {
   showDisconnect(playerRole);
-  appendLog(`⚠ ${playerRole} disconnected`);
+  appendLog(`⚠ ${playerRole} terputus`);
 });
 
-window.client.on('error_msg', (msg) => appendLog('❌ ' + msg));
+window.client.on('error_msg', (msg) => {
+  showToast(msg, 'error');
+  appendLog('❌ ' + msg);
+});
 
-window.client.on('room_reset', () => { window.client.clearSession(); window.location.href = '/'; });
+window.client.on('room_reset', () => { window.client.clearSession(); window.location.href='/'; });
 
-// ── Kick off preload ───────────────────────────────────────────────────────
+// ── Kick off preload ───────────────────────────────────────────────────────────
+// No image assets needed — full procedural rendering.
+// We still use the loading screen briefly to initialise.
+(function boot() {
+  const scr = document.getElementById('loading-screen');
+  const bar = document.getElementById('loading-bar');
+  const txt = document.getElementById('loading-text');
 
-preloadAll(
-  (pct) => {
-    const bar = document.getElementById('loading-bar');
-    const txt = document.getElementById('loading-text');
-    if (bar) bar.style.width = (pct * 100) + '%';
-    if (txt) txt.textContent = `Loading... ${Math.round(pct * 100)}%`;
-  },
-  () => {
-    const scr = document.getElementById('loading-screen');
+  if (bar) bar.style.width = '100%';
+  if (txt) txt.textContent = 'Memuat permainan…';
+
+  // Short delay so the DOM settles
+  setTimeout(() => {
     if (scr) scr.style.display = 'none';
     initBoard();
     _boardReady = true;
     _flushLog();
     applyViewportScale();
     _applyPending();
-  }
-);
+  }, 300);
+})();
