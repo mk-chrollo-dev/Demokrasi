@@ -68,6 +68,15 @@ function handlePresidentClick(presidentId, cardEl) {
 // ── Socket event handlers ────────────────────────────────────────────────────
 
 client.on('room_created', (data) => {
+  if (data.demo) {
+    // Demo mode: skip waiting panel, go straight to president selection
+    hide(panelRole);
+    show(panelSelect);
+    selectTitle.textContent = 'Pilih Presidenmu — VS KOMPUTER';
+    selectSub.textContent   = 'Komputer akan bermain sebagai Player 2';
+    buildPresidentGrid();
+    return;
+  }
   hide(panelRole);
   show(panelWaiting);
   displayCode.textContent = data.gameId;
@@ -140,6 +149,11 @@ client.on('error_msg', (msg) => {
 
 document.getElementById('btn-host').addEventListener('click', () => {
   client.createRoom();
+});
+
+document.getElementById('btn-demo').addEventListener('click', () => {
+  client.clearSession();
+  client.createDemo();
 });
 
 document.getElementById('btn-join').addEventListener('click', () => {

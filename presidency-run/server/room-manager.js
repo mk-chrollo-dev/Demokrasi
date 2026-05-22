@@ -11,6 +11,7 @@ function genId(len) {
 const room = {
   gameId: null,
   status: 'idle',
+  isDemo: false,
   players: {
     p1: { socketId: null, sessionId: null, presidentId: null, ready: false },
     p2: { socketId: null, sessionId: null, presidentId: null, ready: false },
@@ -75,9 +76,24 @@ export function getRoom() {
   return { ...room, players: { p1: { ...room.players.p1 }, p2: { ...room.players.p2 } } };
 }
 
+export function setDemoMode() {
+  room.isDemo = true;
+  // Auto-fill P2 slot with a bot (no real socket)
+  room.players.p2.sessionId = genId(32);
+  room.players.p2.socketId = null; // bot has no socket
+  room.players.p2.ready = false;
+  room.players.p2.presidentId = null;
+  room.status = 'selecting'; // skip 'waiting' phase
+}
+
+export function isDemoMode() {
+  return room.isDemo;
+}
+
 export function resetRoom() {
   room.gameId = null;
   room.status = 'idle';
+  room.isDemo = false;
   room.gameState = null;
   for (const role of ['p1', 'p2']) {
     room.players[role] = { socketId: null, sessionId: null, presidentId: null, ready: false };

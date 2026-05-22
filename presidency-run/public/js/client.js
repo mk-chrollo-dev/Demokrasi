@@ -57,6 +57,7 @@ class GameClient {
 
   // ── API ──────────────────────────────────────────────────────────────────
   createRoom()  { this.socket.emit('create_room'); }
+  createDemo()  { this.socket.emit('create_demo'); }
   joinRoom(id)  { this.socket.emit('join_room', { gameId: id }); }
 
   selectPresident(presidentId) {

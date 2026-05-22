@@ -6,6 +6,7 @@ import { join, dirname } from 'path';
 import { getLocalIP } from './network-info.js';
 import * as room from './room-manager.js';
 import * as runner from './game-runner.js';
+import { pickBotAction, pickBotPresident } from './bot.js';
 import { CARD_REGISTRY } from '../src/cards.js';
 import { PRESIDENTS } from '../src/presidents.js';
 
@@ -124,6 +125,54 @@ export function startServer(port = PORT) {
   });
 }
 
+// ── Bot turn scheduler ─────────────────────────────────────────────────────
+
+let _botScheduled = false;
+
+function scheduleBotTurn(io) {
+  if (!room.isDemoMode()) return;
+  const state = room.getGameState();
+  if (!state || state.status !== 'playing' || state.activePlayer !== 'p2') return;
+  if (_botScheduled) return; // already queued
+
+  _botScheduled = true;
+  setTimeout(() => {
+    _botScheduled = false;
+    const current = room.getGameState();
+    if (!current || current.status !== 'playing' || current.activePlayer !== 'p2') return;
+
+    const action = pickBotAction(current, 'p2');
+    const result = runner.runAction(current, action, 'p2');
+
+    if (result.error) {
+      // Fallback: force END_TURN (happens if all cards are locked edge-case)
+      if (action.type !== 'END_TURN') {
+        const fallback = runner.runAction(current, { type: 'END_TURN' }, 'p2');
+        if (!fallback.error) {
+          room.setGameState(fallback.newState);
+          if (fallback.isGameOver) { io.emit('game_over', runner.buildEndPayload(fallback.newState)); }
+          else { io.emit('state_update', { state: runner.stripWeights(fallback.newState), logEntry: fallback.logEntry }); }
+        }
+      }
+      return;
+    }
+
+    room.setGameState(result.newState);
+
+    if (result.isGameOver) {
+      io.emit('game_over', runner.buildEndPayload(result.newState));
+      return;
+    }
+
+    io.emit('state_update', { state: runner.stripWeights(result.newState), logEntry: result.logEntry });
+
+    // If bot played a card, schedule again to end its turn; also reschedule if still p2's turn
+    if (result.newState.activePlayer === 'p2') {
+      scheduleBotTurn(io);
+    }
+  }, 900);
+}
+
 // ── Socket.io events ────────────────────────────────────────────────────────
 
 io.on('connection', (socket) => {
@@ -138,6 +187,8 @@ io.on('connection', (socket) => {
       state: runner.stripWeights(room.getGameState()),
       roomStatus: room.getRoomStatus(),
     });
+    // If this was a demo game and it's the bot's turn, resume bot
+    scheduleBotTurn(io);
   });
 
   // ── CREATE ROOM ─────────────────────────────────────────────────────────
@@ -152,6 +203,24 @@ io.on('connection', (socket) => {
     room.updateSocketId(sessionId, socket.id);
     socket.emit('room_created', { gameId, sessionId, playerRole: 'p1', localIP: LOCAL_IP, port: PORT });
     console.log(`[ROOM] Created: ${gameId}`);
+  });
+
+  // ── CREATE DEMO (vs computer) ────────────────────────────────────────────
+  socket.on('create_demo', () => {
+    const status = room.getRoomStatus();
+    if (status !== 'idle' && status !== 'finished') {
+      socket.emit('error_msg', 'A room is already active. Ask the host to reset.');
+      return;
+    }
+    _botScheduled = false;
+    room.resetRoom();
+    const { gameId, sessionId } = room.createRoom();
+    room.updateSocketId(sessionId, socket.id);
+    room.setDemoMode(); // auto-fills P2 as bot, advances to 'selecting'
+    // Send room_created with demo:true so the lobby skips the waiting panel
+    socket.emit('room_created', { gameId, sessionId, playerRole: 'p1', demo: true, localIP: LOCAL_IP, port: PORT });
+    socket.emit('room_status', { status: 'selecting', message: 'Demo mode — pick your president!' });
+    console.log('[ROOM] Demo mode started');
   });
 
   // ── JOIN ROOM ───────────────────────────────────────────────────────────
@@ -174,20 +243,32 @@ io.on('connection', (socket) => {
     if (!playerRole) { socket.emit('error_msg', 'Unauthorized.'); return; }
     if (room.getRoomStatus() !== 'selecting') { socket.emit('error_msg', 'Not in selection phase.'); return; }
 
-    const { bothReady } = room.setPresident(playerRole, presidentId);
+    room.setPresident(playerRole, presidentId);
     socket.emit('president_selected', { playerRole, presidentId });
     io.emit('president_picked', { playerRole });
 
-    if (bothReady) {
+    // In demo mode, auto-select a president for the bot when P1 picks
+    let botPresId = null;
+    if (room.isDemoMode() && playerRole === 'p1') {
+      botPresId = pickBotPresident(presidentId);
+      room.setPresident('p2', botPresId);
+      io.emit('president_picked', { playerRole: 'p2' });
+    }
+
+    const roomData = room.getRoom();
+    if (roomData.players.p1.ready && roomData.players.p2.ready) {
       try {
-        const roomData = room.getRoom();
         const initialState = runner.createInitialGameState(
           roomData.players.p1.presidentId,
           roomData.players.p2.presidentId,
         );
         room.setGameState(initialState);
         io.emit('game_start', { state: runner.stripWeights(initialState) });
-        console.log(`[GAME] Started — P1: ${roomData.players.p1.presidentId}, P2: ${roomData.players.p2.presidentId}`);
+        const botLabel = botPresId ? ` (bot: ${botPresId})` : '';
+        console.log(`[GAME] Started — P1: ${roomData.players.p1.presidentId}, P2: ${roomData.players.p2.presidentId}${botLabel}`);
+
+        // Kick off bot if it draws first
+        if (room.isDemoMode()) scheduleBotTurn(io);
       } catch (err) {
         console.error('[ERR] createInitialGameState:', err);
         socket.emit('error_msg', 'Failed to start game: ' + err.message);
@@ -223,6 +304,8 @@ io.on('connection', (socket) => {
           state: runner.stripWeights(result.newState),
           logEntry: result.logEntry,
         });
+        // In demo mode, trigger bot if P1's action made it the bot's turn
+        scheduleBotTurn(io);
       }
     } catch (err) {
       console.error('[ERR] action:', err);

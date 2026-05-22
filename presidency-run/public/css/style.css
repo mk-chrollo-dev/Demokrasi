@@ -100,6 +100,13 @@ button:disabled { opacity: .3; cursor: not-allowed; transform: none; }
 }
 .btn-ghost:hover { border-color: var(--text); color: var(--text); }
 
+.btn-demo {
+  background: linear-gradient(135deg, #1a0030 0%, #0d001a 100%);
+  border-color: #9B59B6;
+  color: #C39BD3;
+}
+.btn-demo:hover { box-shadow: 0 0 16px rgba(155,89,182,.55); border-color: #C39BD3; color: #E8DAEF; }
+
 /* ── Inputs ──────────────────────────────────────────── */
 input[type="text"] {
   background: var(--bg);
