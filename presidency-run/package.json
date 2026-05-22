@@ -1,7 +1,7 @@
 {
-  "name": "presidency-run",
+  "name": "democracy-the-game",
   "version": "1.0.0",
-  "description": "1v1 political card game — LAN multiplayer",
+  "description": "1v1 Indonesian political card game — LAN multiplayer",
   "main": "electron/main.js",
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "terminal": "node src/main.js",
     "test": "node src/test-sim.js",
     "diagnostics": "node src/diagnostics.js",
-    "electron": "electron ."
+    "electron": "electron .",
+    "dist": "electron-builder --publish never"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -21,6 +22,44 @@
     "socket.io": "latest"
   },
   "devDependencies": {
-    "electron": "latest"
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.democracy.thegame",
+    "productName": "Democracy The Game",
+    "copyright": "Democracy The Game",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "src/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "public/assets/icon.ico"
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "icon": "public/assets/icon.icns",
+      "category": "public.app-category.games"
+    },
+    "linux": {
+      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "icon": "public/assets/icon.png",
+      "category": "Game"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

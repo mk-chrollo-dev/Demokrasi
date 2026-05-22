@@ -46,7 +46,7 @@ app.whenReady().then(async () => {
     height: 780,
     minWidth: 800,
     minHeight: 500,
-    title: `Presidency Run  ·  P2 joins: ${localIP}:${port}`,
+    title: `Democracy The Game  ·  P2 joins: ${localIP}:${port}`,
     backgroundColor: '#0A0A1A',
     webPreferences: {
       nodeIntegration: false,
@@ -67,7 +67,7 @@ app.on('activate', () => {
   if (!win && serverPort) {
     win = new BrowserWindow({
       width: 1300, height: 780,
-      title: 'Presidency Run',
+      title: 'Democracy The Game',
       backgroundColor: '#0A0A1A',
       webPreferences: { nodeIntegration: false, contextIsolation: true },
       autoHideMenuBar: true,

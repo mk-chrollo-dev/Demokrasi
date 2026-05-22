@@ -1,4 +1,4 @@
-// Konva.js game UI for Presidency Run.
+// Konva.js game UI for Democracy The Game.
 // Replaces game-ui.js. Loaded as a regular <script> in game.html.
 // Depends on: window.client (client.js), window.Konva (CDN),
 //             window.CARD_REGISTRY (/js/cards-browser.js),
@@ -1080,7 +1080,7 @@ function initBoard() {
   buildPlayerLabels();
   buildActionButtons();
   buildLog();
-  buildTicker(window.HEADLINES || ['Presidency Run — Live News Ticker']);
+  buildTicker(window.HEADLINES || ['Democracy The Game — Live News Ticker']);
   L.board.draw();
   L.ui.draw();
   console.log('[Konva] Board ready');

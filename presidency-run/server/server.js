@@ -254,7 +254,7 @@ io.on('connection', (socket) => {
 function printBanner(port) {
   console.log('');
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║      PRESIDENCY RUN — SERVER READY           ║');
+  console.log('║    DEMOCRACY THE GAME — SERVER READY         ║');
   console.log('╠══════════════════════════════════════════════╣');
   console.log(`║  Host plays at: http://localhost:${port}          ║`);
   console.log(`║  Guest joins:   http://${LOCAL_IP}:${port}        ║`);
