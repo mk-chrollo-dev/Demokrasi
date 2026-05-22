@@ -420,7 +420,7 @@ function renderHand(cardsOrCount, area, faceUp, interactive, lockedTypes = []) {
 
 // ── Foul play slot ─────────────────────────────────────────────────────────
 
-function makeFoulPlaySlot(area, label, isLoaded, isLocked) {
+function makeFoulPlaySlot(area, label, isLoaded, isLocked, slotId) {
   const g = new Konva.Group();
   const bx = area.x + 6, by = area.y + 6, bw = area.w - 12, bh = area.h - 12;
 
@@ -446,6 +446,16 @@ function makeFoulPlaySlot(area, label, isLoaded, isLocked) {
     fill: isLocked ? '#E74C3C' : (isLoaded ? '#9B59B6' : '#333'), align: 'center',
   }));
 
+  if (slotId && isLoaded) {
+    const cardData = getCardData(slotId);
+    if (cardData) {
+      g.listening(true);
+      g.on('mouseover', (e) => showCardTooltip(cardData, e.evt.clientX, e.evt.clientY));
+      g.on('mousemove', (e) => moveCardTooltip(e.evt.clientX, e.evt.clientY));
+      g.on('mouseout', () => hideCardTooltip());
+    }
+  }
+
   return g;
 }
 
@@ -456,6 +466,57 @@ const ASP_ICON = { Ekonomi: 'asp_ekonomi', Kesehatan: 'asp_kesehatan', Keamanan:
 const scoreTexts = { p1: {}, p2: {} };
 const scoreBars  = { p1: {}, p2: {} };
 const BAR_MAX_W  = { p2: 0, p1: 0 }; // set in buildAspectTable
+
+// Tracks previous aspect values to compute deltas for floating numbers
+let _prevAspects = null;
+
+function spawnDeltaFloat(x, y, delta) {
+  if (!delta) return;
+  const txt = new Konva.Text({
+    x, y,
+    text: (delta > 0 ? '+' : '') + delta,
+    fontSize: 14, fontFamily: 'monospace', fontStyle: 'bold',
+    fill: delta > 0 ? '#2ECC71' : '#E74C3C',
+    listening: false,
+  });
+  L.anim.add(txt);
+  L.anim.draw();
+  txt.to({
+    y: y + (delta > 0 ? -44 : 44), opacity: 0, duration: 1.3,
+    onFinish: () => { txt.destroy(); L.anim.draw(); },
+  });
+}
+
+const deckCountTexts = { p1: null, p2: null };
+
+function buildDeckCounters() {
+  const { x, y, w, h } = LAYOUT.playarea;
+  deckCountTexts.p2 = new Konva.Text({
+    x, y: y + 14, width: w,
+    text: 'P2  DECK:-- HAND:--',
+    fontSize: 10, fontFamily: 'monospace', fill: '#444', align: 'center',
+  });
+  deckCountTexts.p1 = new Konva.Text({
+    x, y: y + h - 30, width: w,
+    text: 'P1  DECK:-- HAND:--',
+    fontSize: 10, fontFamily: 'monospace', fill: '#444', align: 'center',
+  });
+  L.board.add(deckCountTexts.p2);
+  L.board.add(deckCountTexts.p1);
+  L.board.draw();
+}
+
+function updateDeckCounters(state) {
+  if (!deckCountTexts.p1) return;
+  const mk = (role) => {
+    const d = (state.players[role].deck || []).length;
+    const h = (state.players[role].hand || []).length;
+    return `${role.toUpperCase()}  DECK:${String(d).padStart(2)} HAND:${String(h).padStart(2)}`;
+  };
+  deckCountTexts.p1.text(mk('p1'));
+  deckCountTexts.p2.text(mk('p2'));
+  L.board.draw();
+}
 
 function buildAspectTable() {
   const { x, y } = LAYOUT.aspects;
@@ -537,9 +598,21 @@ function tweenNumber(textNode, target) {
 }
 
 function updateAspectScores(state) {
-  ASPECTS.forEach(asp => {
+  const { x, y } = LAYOUT.aspects;
+  const mid = x + LAYOUT.aspects.w / 2;
+
+  ASPECTS.forEach((asp, i) => {
     const p1v = state.players.p1.aspects[asp];
     const p2v = state.players.p2.aspects[asp];
+    const ry  = y + i * 48;
+
+    if (_prevAspects) {
+      const dp1 = p1v - (_prevAspects.p1[asp] ?? p1v);
+      const dp2 = p2v - (_prevAspects.p2[asp] ?? p2v);
+      if (dp1 !== 0) spawnDeltaFloat(mid + 90, ry + 8, Math.round(dp1));
+      if (dp2 !== 0) spawnDeltaFloat(x + 30,  ry + 8, Math.round(dp2));
+    }
+
     tweenNumber(scoreTexts.p1[asp], p1v);
     tweenNumber(scoreTexts.p2[asp], p2v);
     const p1col = p1v > p2v ? '#2ECC71' : p1v < p2v ? '#E74C3C' : '#FFFFFF';
@@ -551,6 +624,13 @@ function updateAspectScores(state) {
     scoreBars.p1[asp].fill(p1col);
     scoreBars.p2[asp].fill(p2col);
   });
+
+  if (!_prevAspects) _prevAspects = { p1: {}, p2: {} };
+  ASPECTS.forEach(asp => {
+    _prevAspects.p1[asp] = state.players.p1.aspects[asp];
+    _prevAspects.p2[asp] = state.players.p2.aspects[asp];
+  });
+
   L.board.draw();
 }
 
@@ -773,16 +853,20 @@ function buildTicker(headlines) {
 // ── Active effects ─────────────────────────────────────────────────────────
 
 function renderEffects(state, myRole) {
-  L.effects.destroyChildren();
+  // Only destroy the effects-list group, not SD border / news flash
+  const prev = L.effects.findOne('#fx-list');
+  if (prev) prev.destroy();
+
   const opp = myRole === 'p1' ? 'p2' : 'p1';
   const myEff  = state.players[myRole]?.activeEffects || [];
   const oppEff = state.players[opp]?.activeEffects || [];
+  const g = new Konva.Group({ id: 'fx-list' });
 
-  function renderList(effects, startX, startY, label, positive) {
-    L.effects.add(new Konva.Text({ x: startX, y: startY, text: label, fontSize: 8, fontFamily: 'monospace', fill: '#444' }));
+  function renderList(effects, startX, startY, label) {
+    g.add(new Konva.Text({ x: startX, y: startY, text: label, fontSize: 8, fontFamily: 'monospace', fill: '#444' }));
     effects.slice(0, 4).forEach((e, i) => {
-      L.effects.add(new Konva.Rect({ x: startX, y: startY + 12 + i * 18, width: 230, height: 14, fill: '#0D0D22', stroke: '#1A1A3A', strokeWidth: 1, cornerRadius: 2 }));
-      L.effects.add(new Konva.Text({
+      g.add(new Konva.Rect({ x: startX, y: startY + 12 + i * 18, width: 230, height: 14, fill: '#0D0D22', stroke: '#1A1A3A', strokeWidth: 1, cornerRadius: 2 }));
+      g.add(new Konva.Text({
         x: startX + 4, y: startY + 14 + i * 18, width: 222,
         text: `${e.sourceCard || e.type} [${e.durationTurns ?? '∞'}t]`,
         fontSize: 7, fontFamily: 'monospace',
@@ -792,8 +876,9 @@ function renderEffects(state, myRole) {
   }
 
   const cx = LAYOUT.center.x + 10;
-  renderList(myEff,  cx, LAYOUT.center.y + 330, 'MY EFFECTS', true);
-  renderList(oppEff, cx, LAYOUT.center.y + 460, 'OPP EFFECTS', false);
+  renderList(myEff,  cx, LAYOUT.center.y + 330, 'MY EFFECTS');
+  renderList(oppEff, cx, LAYOUT.center.y + 460, 'OPP EFFECTS');
+  L.effects.add(g);
   L.effects.draw();
 }
 
@@ -949,6 +1034,7 @@ function fullRender(state) {
   updateRoundInfo(state, myRole);
   updateActionButtons(state, myRole);
   updatePlayerLabels(state, myRole);
+  updateDeckCounters(state);
   renderEffects(state, myRole);
 
   // Determine which card types are locked for me this turn
@@ -975,8 +1061,8 @@ function fullRender(state) {
   const myFPLocked  = (myPlayer.activeEffects  || []).some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
   const oppFPLocked = (oppPlayer.activeEffects || []).some(e => e.type === 'lock_foulplay_slot' && (e.durationTurns || 0) > 0);
   L.play.destroyChildren();
-  const myFP  = makeFoulPlaySlot(LAYOUT.p1fp, 'MY FOUL PLAY', !!myPlayer.foulPlaySlot, myFPLocked);
-  const oppFP = makeFoulPlaySlot(LAYOUT.p2fp, 'OPP FOUL PLAY', !!oppPlayer.foulPlaySlot, oppFPLocked);
+  const myFP  = makeFoulPlaySlot(LAYOUT.p1fp, 'MY FOUL PLAY',  !!myPlayer.foulPlaySlot,  myFPLocked, myPlayer.foulPlaySlot);
+  const oppFP = makeFoulPlaySlot(LAYOUT.p2fp, 'OPP FOUL PLAY', !!oppPlayer.foulPlaySlot, oppFPLocked, null);
   L.play.add(myFP);
   L.play.add(oppFP);
   L.play.draw();
@@ -989,6 +1075,7 @@ function fullRender(state) {
 function initBoard() {
   drawBackground();
   buildAspectTable();
+  buildDeckCounters();
   buildRoundInfo();
   buildPlayerLabels();
   buildActionButtons();

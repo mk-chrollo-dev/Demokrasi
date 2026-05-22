@@ -1,41 +1,79 @@
-// Electron entry point — STUB. Wire up after LAN server is working end-to-end.
-//
-// Integration options:
-//   Option A (simple):  spawn server/server.js as a child_process, then open
-//                       BrowserWindow to http://localhost:3000
-//   Option B (cleaner): import startServer() from server/server.js directly
-//                       in the main process (no child process management).
-//                       server.js already exports startServer().
-//
-// Option B is preferred — use it when Electron integration begins.
+import { app, BrowserWindow, Menu } from 'electron';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { startServer } from '../server/server.js';
 
-import { app } from 'electron';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-app.whenReady().then(() => {
-  console.log('[Electron] Stub — server + BrowserWindow not yet wired.');
-  console.log('[Electron] Run `npm start` to use the LAN server directly.');
+let win = null;
+let serverPort = null;
+
+// Single-instance guard
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => {
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
 });
 
-/*
-// ── OPTION B implementation (uncomment when ready) ──────────────────────────
-import { app, BrowserWindow } from 'electron'
-import { startServer } from '../server/server.js'
-
-let win
-
 app.whenReady().then(async () => {
-  const { port } = await startServer()
+  let port = 3000;
+  let localIP = '127.0.0.1';
+
+  try {
+    ({ port, localIP } = await startServer(port));
+  } catch (err) {
+    // Port likely in use — try one more time on next port
+    try {
+      ({ port, localIP } = await startServer(port + 1));
+    } catch (err2) {
+      console.error('[Electron] Could not start server:', err2.message);
+      app.quit();
+      return;
+    }
+  }
+
+  serverPort = port;
+  Menu.setApplicationMenu(null);
 
   win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
-  })
+    width: 1300,
+    height: 780,
+    minWidth: 800,
+    minHeight: 500,
+    title: `Presidency Run  ·  P2 joins: ${localIP}:${port}`,
+    backgroundColor: '#0A0A1A',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+    autoHideMenuBar: true,
+  });
 
-  win.loadURL(`http://localhost:${port}`)
-})
+  win.loadURL(`http://localhost:${port}`);
+  win.on('closed', () => { win = null; });
+});
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
-*/
+  app.quit();
+});
+
+app.on('activate', () => {
+  if (!win && serverPort) {
+    win = new BrowserWindow({
+      width: 1300, height: 780,
+      title: 'Presidency Run',
+      backgroundColor: '#0A0A1A',
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      autoHideMenuBar: true,
+    });
+    Menu.setApplicationMenu(null);
+    win.loadURL(`http://localhost:${serverPort}`);
+    win.on('closed', () => { win = null; });
+  }
+});
