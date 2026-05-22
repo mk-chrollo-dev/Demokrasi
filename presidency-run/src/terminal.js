@@ -64,7 +64,9 @@ export function printBoard(game) {
 
   // Aspects table
   console.log('');
-  console.log(col('bold', padRight('  ASPEK', 20) + padRight(p1.name.substring(0, 14), 16) + p2.name.substring(0, 14)));
+  const p1Label = p1.presidentName ? `${p1.name} (${p1.presidentName.substring(0, 10)})` : p1.name;
+  const p2Label = p2.presidentName ? `${p2.name} (${p2.presidentName.substring(0, 10)})` : p2.name;
+  console.log(col('bold', padRight('  ASPEK', 20) + padRight(p1Label.substring(0, 18), 20) + p2Label.substring(0, 18)));
   console.log(col('dim', '  ' + '─'.repeat(50)));
   for (const aspect of ASPECTS) {
     const v1 = p1.aspects[aspect];
@@ -199,10 +201,69 @@ export function printCardPlayed(playerName, card, effectResults) {
         console.log(`    → Lawan tidak bisa memainkan kartu ${r.target === 'active' ? 'AKTIF' : r.target.toUpperCase()} selama ${r.durationTurns} giliran`);
         break;
       case 'reveal':
-        console.log(`    → Melihat 1 kartu lawan selama ${r.durationTurns} giliran`);
+        console.log(`    → Lihat kartu lawan selama ${r.durationTurns} giliran`);
         break;
       case 'suppress':
         console.log(`    → ${r.target} lawan disupres selama ${r.durationTurns} giliran`);
+        break;
+      case 'skip':
+        console.log(`    → Lawan melewati ${r.durationTurns} giliran`);
+        break;
+      case 'shield': {
+        const shAspect = r.target === 'all' ? 'semua aspek' : r.target;
+        console.log(`    → Shield: ${shAspect} blokir ${r.count} efek negatif berikutnya`);
+        break;
+      }
+      case 'nullify_next_passive':
+        console.log(`    → Kartu Pasif berikutnya lawan dinulifikasi`);
+        break;
+      case 'nullify_effect_stack':
+        console.log(`    → Seluruh efek aktif lawan dihapus!`);
+        break;
+      case 'hostile_cleanse':
+        console.log(r.removed
+          ? `    → Efek terkuat lawan dihapus: ${r.removed}`
+          : `    → Tidak ada efek lawan untuk dihapus`);
+        break;
+      case 'lock_foulplay_slot':
+        console.log(`    → Slot Foul Play lawan dikunci ${r.durationTurns} giliran`);
+        break;
+      case 'block_active_play':
+        console.log(`    → Lawan tidak bisa mainkan kartu AKTIF selama ${r.durationTurns} giliran`);
+        break;
+      case 'block_passive_play':
+        console.log(`    → Lawan tidak bisa mainkan kartu PASIF selama ${r.durationTurns} giliran`);
+        break;
+      case 'block_draw':
+        console.log(`    → Lawan tidak bisa menarik kartu selama ${r.durationTurns} giliran`);
+        break;
+      case 'force_discard_hand':
+        console.log(`    → Lawan membuang seluruh tangan! (tarik ulang ${r.redrawCount} kartu)`);
+        break;
+      case 'reveal_hand_permanent':
+        console.log(`    → Tangan lawan terbuka selamanya!`);
+        break;
+      case 'swap_aspects':
+        console.log(`    → Aspek tertinggi (${r.from}=${r.highVal}) dan terendah (${r.to}=${r.lowVal}) lawan ditukar!`);
+        break;
+      case 'peek_deck':
+        console.log(`    → [INTIP DEK] Kartu teratas lawan: ${r.cards.join(', ') || '(kosong)'}`);
+        break;
+      case 'multi_steal':
+        for (const s of r.stolen) {
+          console.log(`    → Curi ${s.amount} dari ${s.aspect} lawan → kamu`);
+        }
+        break;
+      case 'copy_own_effect':
+        console.log(r.copied
+          ? `    → Duplikat efek: ${r.copied}`
+          : `    → Tidak ada efek aktif untuk diduplikat`);
+        break;
+      case 'top_aspect_boost':
+        console.log(`    → Aspek terkuat kamu (${r.aspect}) +${r.delta}`);
+        break;
+      case 'nullified':
+        console.log(col('yellow', `    → Kartu pasif ${r.cardName} dinulifikasi oleh efek lawan!`));
         break;
       default:
         console.log(`    → ${r.type}`);
@@ -212,25 +273,41 @@ export function printCardPlayed(playerName, card, effectResults) {
 
 export function printFoulPlayResult(playerName, card, result) {
   console.log('');
-  console.log(`  ${col('bgRed', col('bold', ` FOUL PLAY: ${card.name} `))} diaktifkan oleh ${playerName}`);
+  console.log(`  ${col('bgRed', col('bold', ` FOUL PLAY: ${card.name} `))} — ${playerName}`);
   if (result.backfired) {
     console.log(col('red', `  ⚠ BACKFIRE! (${result.chance}% peluang) — ${result.backfireAspect} kamu −15`));
     if (result.forfeit) {
       console.log(col('bgRed', col('bold', '  PERTANDINGAN BERAKHIR — FOUL PLAY FORFEIT!')));
     }
   } else {
-    console.log(col('green', `  Foul Play berhasil! (peluang backfire ${result.chance}%)`));
-    if (result.effectResults) {
-      for (const r of result.effectResults) {
-        if (r.type === 'decay' || r.type === 'growth') {
-          const sign = r.delta >= 0 ? '+' : '';
-          const targetLabel = r.targetPlayer === 'self' ? 'kamu' : 'lawan';
-          const aspectLabel = r.target === 'all' ? 'semua aspek' : r.target;
-          console.log(`    → ${aspectLabel} ${targetLabel} ${sign}${r.delta}`);
-        }
-      }
-    }
+    console.log(col('green', `  Foul Play berhasil! (peluang backfire: ${result.chance}%)`));
+    if (result.effectResults) printCardPlayed('', card, result.effectResults);
   }
+}
+
+export function printPassiveNotification(notification) {
+  if (!notification) return;
+  console.log(col('cyan', `  ✦ ${notification.message}`));
+}
+
+export function printPresidentSelect(presidents) {
+  console.log('\n╔══════════════════════════════════════════╗');
+  console.log('║   PRESIDENCY RUN — PILIH PRESIDEN       ║');
+  console.log('╚══════════════════════════════════════════╝\n');
+  presidents.forEach((p, i) => {
+    console.log(`  ${col('bold', `${i + 1}.`)} ${col('yellow', p.displayName)}`);
+    console.log(`     ${col('dim', p.tagline)}`);
+    console.log(`     ${col('cyan', p.passive.description)}`);
+    console.log('');
+  });
+}
+
+export function printPresidentConfirm(playerName, president) {
+  console.log(`\n  ${col('bold', playerName)} memilih: ${col('yellow', president.displayName)}`);
+  for (const line of president.humorBio) {
+    console.log(`  ${col('dim', line)}`);
+  }
+  console.log('');
 }
 
 export function printNewsTicker(headline) {

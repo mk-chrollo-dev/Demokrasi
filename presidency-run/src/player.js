@@ -1,25 +1,29 @@
 import { AspectEngine } from './aspects.js';
-import { createDeck } from './cards.js';
+import { buildDeck } from './cards.js';
 
 export class Player {
-  constructor(name) {
+  constructor(name, president = null) {
     this.name = name;
+    this.president = president;
     this.aspects = AspectEngine.initialScores();
     this.activeEffects = [];
-    this.foulPlaySlot = null;     // card loaded into foul play slot
-    this.foulPlayUses = 0;        // number of times foul play has been activated
+    this.foulPlaySlot = null;
+    this.foulPlayUses = 0;
+    this.handRevealed = false; // set true by reveal_hand_permanent
 
-    // Deck & hand
     this.deck = [];
     this.hand = [];
     this.discard = [];
-
-    // Deck-out tracking
     this.emptyDeckRounds = 0;
+
+    // Apply init passive (e.g. Soeharto Keamanan→65, Megawati Ekonomi→58)
+    if (president?.passive?.applyOnInit) {
+      president.passive.applyOnInit(this);
+    }
   }
 
   initDeck() {
-    this.deck = createDeck();
+    this.deck = this.president ? buildDeck(this.president.deckIds) : [];
     this._shuffleDeck();
   }
 
@@ -47,9 +51,7 @@ export class Player {
     return drawn;
   }
 
-  drawStartingHand() {
-    this.drawCard(5);
-  }
+  drawStartingHand() { this.drawCard(5); }
 
   playCard(handIndex) {
     if (handIndex < 0 || handIndex >= this.hand.length) return null;
@@ -60,7 +62,7 @@ export class Player {
 
   loadFoulPlay(handIndex) {
     const card = this.hand[handIndex];
-    if (!card || card.type !== 'foulplay') return false;
+    if (!card || !card.isFoulPlay) return false;
     this.foulPlaySlot = this.hand.splice(handIndex, 1)[0];
     return true;
   }
@@ -74,11 +76,18 @@ export class Player {
     return card;
   }
 
-  // Backfire chance indexed by foulPlayUses (capped at index 4)
   backfireChance() {
     const table = [5, 15, 30, 50, 75];
     const idx = Math.min(this.foulPlayUses - 1, table.length - 1);
     return idx < 0 ? 0 : table[idx];
+  }
+
+  // Discard entire hand; return count discarded
+  discardHand() {
+    const count = this.hand.length;
+    this.discard.push(...this.hand);
+    this.hand = [];
+    return count;
   }
 
   isHandAndDeckEmpty() {

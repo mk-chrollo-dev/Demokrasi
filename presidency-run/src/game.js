@@ -1,3 +1,6 @@
+// Future UI: replace terminal.js with a Phaser 3 scene.
+// All src/ files are UI-agnostic and need zero changes.
+
 import { Player } from './player.js';
 import { EffectEngine } from './effects.js';
 import { AspectEngine } from './aspects.js';
@@ -20,35 +23,33 @@ export const WIN_REASON = {
 };
 
 export class GameState {
-  constructor(p1Name = 'Pemain 1', p2Name = 'Pemain 2') {
-    this.players = [new Player(p1Name), new Player(p2Name)];
+  // presidents: array of 2 president objects (from presidents.js), or null for test mode
+  constructor(p1Name, p2Name, p1President = null, p2President = null) {
+    this.players = [
+      new Player(p1Name, p1President),
+      new Player(p2Name, p2President),
+    ];
     this.effectEngine = new EffectEngine();
     this.newsEngine = new NewsEngine();
 
     this.round = 1;
     this.totalRounds = 7;
-    this.turnInRound = 0;       // 0–9 (10 total: 5 per player)
+    this.turnInRound = 0;
     this.turnsPerPlayer = 5;
     this.phase = GAME_PHASE.SETUP;
-    this.firstMoverThisRound = 0; // alternates each round
+    this.firstMoverThisRound = 0;
 
-    this.weights = AspectEngine.uniformWeights(); // starts equal; news shifts these
+    this.weights = AspectEngine.uniformWeights();
 
     this.winner = null;
     this.winReason = null;
     this.lastNewsHeadline = null;
-    this.pendingDrawForCurrentPlayer = 0;
 
-    // Sudden death
     this.isSuddenDeath = false;
     this.suddenDeathTurnCount = 0;
-  }
 
-  // Returns the player whose turn it currently is
-  currentPlayer() {
-    const offset = this.turnInRound % 2 === 0 ? 0 : 1;
-    const playerIndex = (this.firstMoverThisRound + offset) % 2;
-    return this.players[playerIndex];
+    // Pending redraw after force_discard_hand: { playerIndex, count }
+    this._pendingRedraw = null;
   }
 
   currentPlayerIndex() {
@@ -56,9 +57,8 @@ export class GameState {
     return (this.firstMoverThisRound + offset) % 2;
   }
 
-  opponentOf(playerIndex) {
-    return this.players[1 - playerIndex];
-  }
+  currentPlayer() { return this.players[this.currentPlayerIndex()]; }
+  opponentOf(playerIndex) { return this.players[1 - playerIndex]; }
 
   // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -70,8 +70,6 @@ export class GameState {
     this.phase = GAME_PHASE.MULLIGAN;
   }
 
-  // Accept or reject mulligan for a player (0 or 1)
-  // Returns their new hand
   doMulligan(playerIndex) {
     const p = this.players[playerIndex];
     p.deck.push(...p.hand);
@@ -88,52 +86,89 @@ export class GameState {
 
   // ── Turn execution ─────────────────────────────────────────────────────────
 
-  // Step 1: draw phase for current player
+  // Returns { drawn, skipped, passiveNotification, pendingRedrawHandled }
   beginTurn() {
-    const p = this.currentPlayer();
-    const drawn = p.drawCard(1);
-    this.pendingDrawForCurrentPlayer = 0;
-    return drawn;
+    const cpIdx = this.currentPlayerIndex();
+    const p = this.players[cpIdx];
+    const opp = this.opponentOf(cpIdx);
+
+    // Handle pending redraw from force_discard_hand
+    let pendingRedrawHandled = null;
+    if (this._pendingRedraw && this._pendingRedraw.playerIndex === cpIdx) {
+      const drawn = p.drawCard(this._pendingRedraw.count);
+      pendingRedrawHandled = { drawn, count: this._pendingRedraw.count };
+      this._pendingRedraw = null;
+    }
+
+    // Check skip (turn lost)
+    if (this.effectEngine.isSkipped(p)) {
+      this.effectEngine.consumeSkip(p);
+      return { drawn: [], skipped: true, passiveNotification: null, pendingRedrawHandled };
+    }
+
+    // Per-turn passive (e.g. Prabowo)
+    let passiveNotification = null;
+    if (p.president?.passive?.applyOnTurnStart) {
+      passiveNotification = p.president.passive.applyOnTurnStart(p, opp);
+    }
+
+    // Round-first-turn passive (e.g. Soekarno, Jokowi) — fires on turn 0 or 1
+    const isFirstMoverFirstTurn = this.turnInRound === 0 && cpIdx === this.firstMoverThisRound;
+    const isSecondMoverFirstTurn = this.turnInRound === 1 && cpIdx !== this.firstMoverThisRound;
+    if ((isFirstMoverFirstTurn || isSecondMoverFirstTurn) && p.president?.passive?.applyOnRoundFirstTurn) {
+      const roundPassive = p.president.passive.applyOnRoundFirstTurn(p, opp);
+      if (roundPassive) passiveNotification = roundPassive;
+    }
+
+    // Draw (blocked if block_draw is active)
+    let drawn = [];
+    if (!this.effectEngine.isDrawBlocked(p)) {
+      drawn = p.drawCard(1);
+    }
+
+    return { drawn, skipped: false, passiveNotification, pendingRedrawHandled };
   }
 
-  // Step 2: play a card from hand by index (0-based)
-  // Returns { card, effectResults, backfired, backfireAspect, lockedType }
+  // Play a card from hand (0-based index). Returns result object.
   playCard(handIndex, playerIndex) {
     const p = this.players[playerIndex];
     const opp = this.opponentOf(playerIndex);
 
     const card = p.hand[handIndex];
     if (!card) return { error: 'invalid_card' };
-
-    // Check lock
     if (this.effectEngine.isTypeLocked(p, card.type)) {
       return { error: 'locked', lockedType: card.type };
     }
 
     p.playCard(handIndex);
-
     const effectResults = this.effectEngine.applyOnPlayEffects(card, p, opp);
 
-    // Handle draw effects
+    // Handle side effects that need game-level handling
     for (const r of effectResults) {
       if (r.type === 'draw') {
-        const drawn = p.drawCard(r.delta);
-        r.drawnCards = drawn;
+        r.drawnCards = p.drawCard(r.delta);
+      }
+      if (r.type === 'force_discard_hand') {
+        opp.discardHand();
+        this._pendingRedraw = { playerIndex: 1 - playerIndex, count: r.redrawCount };
+        r.discarded = true;
       }
     }
 
     return { card, effectResults };
   }
 
-  // Step 3: load foul play card into slot
   loadFoulPlay(handIndex, playerIndex) {
     return this.players[playerIndex].loadFoulPlay(handIndex);
   }
 
-  // Step 4: activate foul play slot
   activateFoulPlay(playerIndex) {
     const p = this.players[playerIndex];
     const opp = this.opponentOf(playerIndex);
+
+    if (this.effectEngine.isFoulPlayLocked(p)) {
+      return { error: 'foulplay_slot_locked' };
+    }
 
     const card = p.activateFoulPlay();
     if (!card) return { error: 'no_foul_play_loaded' };
@@ -143,45 +178,43 @@ export class GameState {
     const backfired = roll < chance;
 
     if (backfired) {
-      // Cancel effect, pick random aspect of this player, -15
       const aspect = ASPECTS[Math.floor(Math.random() * ASPECTS.length)];
       p.aspects[aspect] = Math.max(0, p.aspects[aspect] - 15);
 
-      // Check forfeit condition: uses >= 4 (50%+ risk) while trailing
       const myScore = AspectEngine.weightedScore(p, this.weights);
       const oppScore = AspectEngine.weightedScore(opp, this.weights);
       const trailing = myScore < oppScore;
-      const highRisk = p.foulPlayUses >= 4; // after increment, index 3 → 50%
+      const highRisk = p.foulPlayUses >= 4;
 
       if (highRisk && trailing) {
         this.winner = 1 - playerIndex;
         this.winReason = WIN_REASON.FOUL_PLAY_FORFEIT;
         this.phase = GAME_PHASE.GAME_OVER;
-        return { card, backfired: true, backfireAspect: aspect, forfeit: true };
+        return { card, backfired: true, backfireAspect: aspect, forfeit: true, chance };
       }
 
       return { card, backfired: true, backfireAspect: aspect, forfeit: false, chance };
     }
 
-    // Not backfired — apply card effects
     const effectResults = this.effectEngine.applyOnPlayEffects(card, p, opp);
     for (const r of effectResults) {
-      if (r.type === 'draw') {
-        const drawn = p.drawCard(r.delta);
-        r.drawnCards = drawn;
+      if (r.type === 'draw') r.drawnCards = p.drawCard(r.delta);
+      if (r.type === 'force_discard_hand') {
+        opp.discardHand();
+        this._pendingRedraw = { playerIndex: 1 - playerIndex, count: r.redrawCount };
+        r.discarded = true;
       }
     }
 
     return { card, backfired: false, effectResults, chance };
   }
 
-  // Step 5: end of turn — tick effects, advance turn counter
+  // Step 5: end of turn — tick, advance
   endTurn(playerIndex) {
     const p = this.players[playerIndex];
     const opp = this.opponentOf(playerIndex);
     const expired = this.effectEngine.tickEffects(p, opp);
 
-    // Clamp aspect scores
     for (const player of this.players) {
       for (const aspect of ASPECTS) {
         player.aspects[aspect] = Math.max(0, Math.min(100, player.aspects[aspect]));
@@ -189,24 +222,18 @@ export class GameState {
     }
 
     this.turnInRound++;
-    this.pendingDrawForCurrentPlayer = 0;
-
-    const turnsPerRound = this.turnsPerPlayer * 2;
 
     if (this.isSuddenDeath) {
       this.suddenDeathTurnCount++;
       return this._checkSuddenDeathEnd(expired);
     }
 
-    if (this.turnInRound >= turnsPerRound) {
-      return this._endRound(expired);
-    }
-
+    const turnsPerRound = this.turnsPerPlayer * 2;
+    if (this.turnInRound >= turnsPerRound) return this._endRound(expired);
     return { expired, phase: GAME_PHASE.PLAYER_TURN };
   }
 
   _endRound(expiredFromTick) {
-    // Check deck-out
     for (let i = 0; i < 2; i++) {
       const p = this.players[i];
       if (p.isHandAndDeckEmpty()) {
@@ -222,9 +249,7 @@ export class GameState {
       }
     }
 
-    if (this.round >= this.totalRounds) {
-      return this._finalScoreCheck();
-    }
+    if (this.round >= this.totalRounds) return this._finalScoreCheck();
 
     this.round++;
     this.turnInRound = 0;
@@ -235,16 +260,13 @@ export class GameState {
     return { expired: expiredFromTick, phase: GAME_PHASE.ROUND_END };
   }
 
-  startNextRound() {
-    this.phase = GAME_PHASE.PLAYER_TURN;
-  }
+  startNextRound() { this.phase = GAME_PHASE.PLAYER_TURN; }
 
   _finalScoreCheck() {
     const s0 = AspectEngine.weightedScore(this.players[0], this.weights);
     const s1 = AspectEngine.weightedScore(this.players[1], this.weights);
 
     if (Math.abs(s0 - s1) < 0.001) {
-      // Exact tie → sudden death
       this._initSuddenDeath();
       return { phase: GAME_PHASE.PLAYER_TURN, suddenDeath: true };
     }
@@ -258,17 +280,12 @@ export class GameState {
   _initSuddenDeath() {
     this.isSuddenDeath = true;
     this.suddenDeathTurnCount = 0;
-    this.weights = AspectEngine.randomWeights(); // re-randomise weights
+    this.weights = AspectEngine.randomWeights();
     this.round++;
     this.turnInRound = 0;
-    this.turnsPerPlayer = 5; // 5 turns each
+    this.turnsPerPlayer = 5;
     this.firstMoverThisRound = 1 - this.firstMoverThisRound;
-
-    // Draw 3 for each player
-    for (const p of this.players) {
-      p.drawCard(3);
-    }
-
+    for (const p of this.players) p.drawCard(3);
     this.phase = GAME_PHASE.PLAYER_TURN;
   }
 
@@ -277,17 +294,9 @@ export class GameState {
     if (this.suddenDeathTurnCount < turnsPerRound) {
       return { expired, phase: GAME_PHASE.PLAYER_TURN };
     }
-
     const s0 = AspectEngine.weightedScore(this.players[0], this.weights);
     const s1 = AspectEngine.weightedScore(this.players[1], this.weights);
-
-    if (Math.abs(s0 - s1) < 0.001) {
-      // Still tied — first net positive lead wins; for now declare draw → P1 wins
-      this.winner = 0;
-    } else {
-      this.winner = s0 > s1 ? 0 : 1;
-    }
-
+    this.winner = Math.abs(s0 - s1) < 0.001 ? 0 : (s0 > s1 ? 0 : 1);
     this.winReason = WIN_REASON.SUDDEN_DEATH;
     this.phase = GAME_PHASE.GAME_OVER;
     return { phase: GAME_PHASE.GAME_OVER, expired };
@@ -300,7 +309,6 @@ export class GameState {
     return result;
   }
 
-  // For the timed news ticker (setInterval in terminal.js)
   fireNewsTick() {
     const result = this.newsEngine.fire(this.weights);
     this.weights = result.newWeights;
@@ -308,7 +316,6 @@ export class GameState {
     return result;
   }
 
-  // Snapshot of state for rendering (no hidden info)
   toView(revealWeights = false) {
     return {
       round: this.round,
@@ -319,17 +326,22 @@ export class GameState {
       currentPlayerIndex: this.currentPlayerIndex(),
       players: this.players.map(p => ({
         name: p.name,
+        presidentId: p.president?.id ?? null,
+        presidentName: p.president?.displayName ?? null,
         aspects: { ...p.aspects },
         handSize: p.hand.length,
         deckSize: p.deck.length,
         discardSize: p.discard.length,
         activeEffects: p.activeEffects.map(e => ({
-          name: e.name || e.type,
+          name: e.sourceCard || e.type,
+          type: e.type,
           durationTurns: e.durationTurns,
-          sourceCard: e.sourceCard,
+          remainingUses: e.remainingUses,
+          remainingCount: e.remainingCount,
         })),
         foulPlayLoaded: !!p.foulPlaySlot,
         foulPlayUses: p.foulPlayUses,
+        handRevealed: p.handRevealed,
       })),
       weights: revealWeights ? { ...this.weights } : null,
       lastNewsHeadline: this.lastNewsHeadline,
@@ -338,11 +350,7 @@ export class GameState {
     };
   }
 
-  // Returns the current player's hand (for display in terminal)
-  currentPlayerHand() {
-    return this.currentPlayer().hand;
-  }
-
+  currentPlayerHand() { return this.currentPlayer().hand; }
   weightedScore(playerIndex) {
     return AspectEngine.weightedScore(this.players[playerIndex], this.weights);
   }
